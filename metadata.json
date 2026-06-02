@@ -1,0 +1,6 @@
+{
+  "name": "SmartPoint Web",
+  "description": "Sistema de ponto eletrônico corporativo com reconhecimento facial inteligente e gestão administrativa.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
