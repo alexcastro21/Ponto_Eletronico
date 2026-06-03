@@ -16,6 +16,40 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<'overview' | 'employees' | 'logs' | 'ajustes' | 'settings' | 'audit' | 'companies' | 'escalas'>('overview');
 
+  // Sidebar drag to scroll & smooth controls helper
+  const asideRef = useRef<HTMLDivElement>(null);
+  const [isAsideDragging, setIsAsideDragging] = useState(false);
+  const [asideStartX, setAsideStartX] = useState(0);
+  const [asideScrollLeft, setAsideScrollLeft] = useState(0);
+
+  const handleAsideMouseDown = (e: React.MouseEvent) => {
+    if (!asideRef.current) return;
+    setIsAsideDragging(true);
+    setAsideStartX(e.pageX - asideRef.current.offsetLeft);
+    setAsideScrollLeft(asideRef.current.scrollLeft);
+  };
+
+  const handleAsideMouseLeaveOrUp = () => {
+    setIsAsideDragging(false);
+  };
+
+  const handleAsideMouseMove = (e: React.MouseEvent) => {
+    if (!isAsideDragging || !asideRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - asideRef.current.offsetLeft;
+    const walk = (x - asideStartX) * 1.5; // Scroll speed multiplier
+    asideRef.current.scrollLeft = asideScrollLeft - walk;
+  };
+
+  const scrollAside = (direction: 'left' | 'right') => {
+    if (!asideRef.current) return;
+    const scrollAmount = 180;
+    asideRef.current.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth'
+    });
+  };
+
   // DB States
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [logs, setLogs] = useState<TimeLog[]>([]);
@@ -573,8 +607,36 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       {/* Frame content layout */}
       <div className="flex-1 flex max-w-7xl w-full mx-auto p-4 md:p-6 gap-6 flex-col md:flex-row relative">
         
+        {/* Mobile menu indicators and buttons to slide sideways */}
+        <div className="md:hidden flex items-center justify-between p-2.5 bg-[#121829] border border-gray-850 rounded-xl tracking-wider shrink-0 mb-1">
+          <span className="text-[10px] font-bold text-gray-400 uppercase font-mono">Menu do Painel</span>
+          <div className="flex items-center gap-1.5">
+            <button 
+              onClick={() => scrollAside('left')} 
+              className="px-2.5 py-1 bg-gray-800/80 hover:bg-gray-700 hover:text-white border border-gray-700/80 text-gray-300 rounded-md text-[10px] font-bold uppercase transition-all active:scale-95 cursor-pointer"
+              title="Voltar Menu"
+            >
+              &larr; Deslizar
+            </button>
+            <button 
+              onClick={() => scrollAside('right')} 
+              className="px-2.5 py-1 bg-gray-800/80 hover:bg-gray-700 hover:text-white border border-gray-700/80 text-gray-300 rounded-md text-[10px] font-bold uppercase transition-all active:scale-95 cursor-pointer"
+              title="Avançar Menu"
+            >
+              Avançar &rarr;
+            </button>
+          </div>
+        </div>
+
         {/* Sidebar Navigation - horizontal scrolling list on mobile, vertical sidebar on desktop */}
-        <aside className="w-full md:w-64 bg-gray-900/40 border border-gray-850/60 rounded-xl p-3 md:p-4 shrink-0 flex flex-row md:flex-col overflow-x-auto md:overflow-visible whitespace-nowrap md:whitespace-normal space-x-2 md:space-x-0 md:space-y-1.5 h-fit backdrop-blur-sm shadow-xl pb-4 md:pb-4">
+        <aside 
+          ref={asideRef}
+          onMouseDown={handleAsideMouseDown}
+          onMouseLeave={handleAsideMouseLeaveOrUp}
+          onMouseUp={handleAsideMouseLeaveOrUp}
+          onMouseMove={handleAsideMouseMove}
+          className="w-full md:w-64 bg-gray-900/40 border border-gray-850/60 rounded-xl p-3 md:p-4 shrink-0 flex flex-row md:flex-col overflow-x-auto md:overflow-visible whitespace-nowrap md:whitespace-normal space-x-2 md:space-x-0 md:space-y-1.5 h-fit backdrop-blur-sm shadow-xl pb-4 md:pb-4 cursor-grab active:cursor-grabbing select-none"
+        >
           <span className="hidden md:inline-block text-[10px] font-mono text-gray-500 uppercase tracking-widest px-3.5 py-1 mb-2">GERAL</span>
           
           <button
