@@ -667,8 +667,8 @@ Responda APENAS com um formato estrito de objeto JSON (sem tags markdown de cód
   if (candidatesWithPhotos.length === 0) {
     return res.status(400).json({
       matched: false,
-      error: "Nenhuma biometria cadastrada.",
-      reason: "Nenhuma foto de perfil foi registrada para os colaboradores ativos. Acesse o Painel Admin e adicione/edite um funcionário capturando uma foto real."
+      error: "Biometria não cadastrada",
+      reason: "Nenhuma foto de perfil foi registrada para os colaboradores ativos. Acesse o Painel Administrativo, adicione ou edite um funcionário e clique em 'Tirar Foto' para habilitar o reconhecimento facial."
     });
   }
 
@@ -676,7 +676,7 @@ Responda APENAS com um formato estrito de objeto JSON (sem tags markdown de cód
   return res.json({
     matched: false,
     confidence: 0.0,
-    reason: "Rosto detectado com sucesso, porém fisionomia não compatível com nenhum colaborador ativo cadastrado."
+    reason: "Rosto detectado, porém fisionomia não compatível. Se você ainda não cadastrou sua foto de biometria ou se mudou de visual, por favor acesse o Painel Administrativo para realizar o seu cadastro."
   });
 });
 

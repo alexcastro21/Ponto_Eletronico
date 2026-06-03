@@ -229,9 +229,12 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
         photoDataUri = canvas.toDataURL("image/jpeg", 0.85);
       }
     } else {
-      // Offline/Simulator reference image
-      const matchingEmp = employees.find(e => e.cpf === simulationCpf);
-      photoDataUri = matchingEmp?.fotoUrl || "";
+      // Offline/Simulator fallback: automatically grab the first custom photo employee registered in the system
+      const customPhotoActive = employees.find(e => 
+        e.status === "ativo" &&
+        e.fotoUrl && e.fotoUrl.startsWith("data:image/") && !e.fotoUrl.toLowerCase().includes("svg")
+      );
+      photoDataUri = customPhotoActive?.fotoUrl || "";
     }
 
     setCapturedImage(photoDataUri);
@@ -257,7 +260,7 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
               bestCpf = emp.cpf;
             }
           }
-          if (bestCpf && minDistance < 1200) { // Keep threshold generous for demo validation
+          if (bestCpf && minDistance < 2400) { // Keep threshold generous for demo validation and wider compatibility
             clientMatchedCpf = bestCpf;
           }
         }
