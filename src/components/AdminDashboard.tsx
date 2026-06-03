@@ -4,7 +4,7 @@ import {
   Plus, Search, Edit, Trash2, LogOut, RefreshCw, Sliders, Download, 
   Database, AlertCircle, CheckCircle, ShieldAlert, BadgeInfo, Camera, AlertTriangle
 } from "lucide-react";
-import { Employee, TimeLog, AjusteRequest, SystemLog, SystemConfig, TimeLogType } from "../types";
+import { Employee, TimeLog, AjusteRequest, SystemLog, SystemConfig, TimeLogType, Company, Scale } from "../types";
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -14,13 +14,15 @@ const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   // Navigation tabs
-  const [activeTab, setActiveTab] = useState<'overview' | 'employees' | 'logs' | 'ajustes' | 'settings' | 'audit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'employees' | 'logs' | 'ajustes' | 'settings' | 'audit' | 'companies' | 'escalas'>('overview');
 
   // DB States
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [logs, setLogs] = useState<TimeLog[]>([]);
   const [ajustes, setAjustes] = useState<AjusteRequest[]>([]);
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [escalas, setEscalas] = useState<Scale[]>([]);
   const [config, setConfig] = useState<SystemConfig>({
     toleranciaMinutos: 10,
     empresaNome: "Empresa Tecnologia S.A.",
@@ -52,7 +54,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     almocoSaida: "12:00",
     almocoRetorno: "13:00",
     saida: "17:00",
-    fotoUrl: ""
+    fotoUrl: "",
+    empresaId: "",
+    escalaId: ""
   });
   const [rawPhotoUpload, setRawPhotoUpload] = useState<string | null>(null);
   const [usingCameraForProfile, setUsingCameraForProfile] = useState(false);
@@ -69,6 +73,106 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     tipo: "entrada" as TimeLogType
   });
 
+  // Companies and scale form submit handlers
+  const [compForm, setCompForm] = useState({ nome: "", cnpj: "", endereco: "" });
+  const [scaleForm, setScaleForm] = useState({
+    nome: "",
+    cargaHoraria: "44h semanais",
+    entrada: "08:00",
+    almocoSaida: "12:00",
+    almocoRetorno: "13:00",
+    saida: "17:00",
+    tolerancia: 10
+  });
+
+  const handleAddCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!compForm.nome || !compForm.cnpj) {
+      showToast("Preencha o Nome e o CNPJ da empresa.", "error");
+      return;
+    }
+    try {
+      const res = await fetch("/api/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(compForm)
+      });
+      if (res.ok) {
+        showToast("Empresa cadastrada com sucesso!", "success");
+        setCompForm({ nome: "", cnpj: "", endereco: "" });
+        setDbUpdateTrigger(prev => prev + 1);
+      } else {
+        const errorData = await res.json();
+        showToast(errorData.error || "Erro ao cadastrar empresa.", "error");
+      }
+    } catch (err) {
+      showToast("Falha de comunicação operacional.", "error");
+    }
+  };
+
+  const handleDeleteCompany = async (id: string, nome: string) => {
+    if (!confirm(`Deseja inativar o cadastro da empresa '${nome}'?`)) return;
+    try {
+      const res = await fetch(`/api/companies/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        showToast(`Empresa '${nome}' inativada.`, "success");
+        setDbUpdateTrigger(prev => prev + 1);
+      } else {
+        showToast("Erro ao inativar empresa.", "error");
+      }
+    } catch (err) {
+      showToast("Falha no servidor.", "error");
+    }
+  };
+
+  const handleAddScale = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scaleForm.nome || !scaleForm.entrada || !scaleForm.saida) {
+      showToast("Nome, entrada e saída são obrigatórios.", "error");
+      return;
+    }
+    try {
+      const res = await fetch("/api/escalas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(scaleForm)
+      });
+      if (res.ok) {
+        showToast("Escala de trabalho cadastrada!", "success");
+        setScaleForm({
+          nome: "",
+          cargaHoraria: "44h semanais",
+          entrada: "08:00",
+          almocoSaida: "12:00",
+          almocoRetorno: "13:00",
+          saida: "17:00",
+          tolerancia: 10
+        });
+        setDbUpdateTrigger(prev => prev + 1);
+      } else {
+        const errorData = await res.json();
+        showToast(errorData.error || "Erro ao criar jornada.", "error");
+      }
+    } catch (err) {
+      showToast("Erro técnico de envio.", "error");
+    }
+  };
+
+  const handleDeleteScale = async (id: string, nome: string) => {
+    if (!confirm(`Deseja deletar a escala de jornada '${nome}'?`)) return;
+    try {
+      const res = await fetch(`/api/escalas/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        showToast(`Escala '${nome}' removida com sucesso.`, "success");
+        setDbUpdateTrigger(prev => prev + 1);
+      } else {
+        showToast("Erro ao remover escala.", "error");
+      }
+    } catch (err) {
+      showToast("Erro operacional.", "error");
+    }
+  };
+
   // Feedback notification overlays
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -83,6 +187,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       setAjustes(db.ajustes);
       setConfig(db.config);
       setSystemLogs(db.systemLogs);
+      setCompanies(db.companies || []);
+      setEscalas(db.escalas || []);
     } catch (err) {
       showToast("Não foi possível sincronizar informações do servidor de ponto.", "error");
     } finally {
@@ -230,7 +336,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       almocoSaida: emp.almocoSaida,
       almocoRetorno: emp.almocoRetorno,
       saida: emp.saida,
-      fotoUrl: emp.fotoUrl
+      fotoUrl: emp.fotoUrl,
+      empresaId: emp.empresaId || "",
+      escalaId: emp.escalaId || ""
     });
     setRawPhotoUpload(emp.fotoUrl && emp.fotoUrl.startsWith("data:") ? emp.fotoUrl : null);
     setIsEmployeeModalOpen(true);
@@ -336,7 +444,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       almocoSaida: "12:00",
       almocoRetorno: "13:00",
       saida: "17:00",
-      fotoUrl: ""
+      fotoUrl: "",
+      empresaId: "",
+      escalaId: ""
     });
     setRawPhotoUpload(null);
     stopProfileCamera();
@@ -349,7 +459,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       return;
     }
 
-    const headers = ["ID", "CPF", "Nome Colaborador", "Data", "Hora", "Tipo Registro", "Status Presença", "Face Recog Confiança"];
+    const headers = ["ID Registro", "CPF Colaborador", "Nome Colaborador", "Data Falada", "Horário Batida", "Tipo Operação", "Enquadramento Penal", "Confiança Biometrica", "Empresa Registrada", "IP do Dispositivo", "Validação Liveness", "Assinatura Digital (SHA-256 REP-P)"];
     const rows = filteredLogs.map(l => [
       l.id,
       l.cpf,
@@ -358,7 +468,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       l.hora,
       l.tipo.toUpperCase(),
       l.status.toUpperCase(),
-      l.confidence.toFixed(2)
+      l.confidence.toFixed(2),
+      getCompanyName(l.empresaId),
+      l.ip || "127.0.0.1",
+      l.liveness || "Liveness Validada",
+      l.hash || "-"
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
@@ -367,14 +481,26 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Relatorio_Pontos_${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute("download", `Relatorio_Patente_SmartPoint_${new Date().toISOString().split("T")[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast("Relatório CSV gerado e baixado no navegador.", "success");
+    showToast("Relatório de Auditoria REP-P em CSV exportado com assinaturas eletrônicas.", "success");
   };
 
   // Calculations for Admin indicators
+  const getCompanyName = (empId?: string) => {
+    if (!empId) return "Empresa Principal";
+    const comp = companies.find(c => c.id === empId);
+    return comp ? comp.nome : "Empresa Principal";
+  };
+
+  const getScaleName = (scaleId?: string) => {
+    if (!scaleId) return "Escala Padrão";
+    const scale = escalas.find(s => s.id === scaleId);
+    return scale ? scale.nome : "Escala Padrão";
+  };
+
   const activeEmployees = employees.filter(e => e.status === "ativo");
   const todayStr = new Date().toISOString().split("T")[0];
   const logsToday = logs.filter(l => l.data === todayStr);
@@ -507,6 +633,26 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           >
             <Settings className="h-4.5 w-4.5" />
             Regras & Tolerâncias
+          </button>
+
+          <button
+            onClick={() => setActiveTab('companies')}
+            className={`w-full text-left text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 ${
+              activeTab === 'companies' ? "bg-blue-600 text-white font-bold" : "text-gray-400 hover:text-white hover:bg-gray-850/50"
+            }`}
+          >
+            <Database className="h-4.5 w-4.5 text-blue-400" />
+            Cadastros de Empresas
+          </button>
+
+          <button
+            onClick={() => setActiveTab('escalas')}
+            className={`w-full text-left text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 ${
+              activeTab === 'escalas' ? "bg-blue-600 text-white font-bold" : "text-gray-400 hover:text-white hover:bg-gray-850/50"
+            }`}
+          >
+            <Sliders className="h-4.5 w-4.5 text-indigo-400" />
+            Escalas de Jornada
           </button>
 
           <button
@@ -1146,6 +1292,255 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             </div>
           )}
 
+          {/* Active Tab: Companies Administration CRUD */}
+          {activeTab === 'companies' && (
+            <div className="space-y-6 animate-fade-in">
+              <div>
+                <h2 className="text-xl font-bold text-white tracking-tight">Gestão de Empresas ({companies.length})</h2>
+                <p className="text-xs text-gray-400">Organize os múltiplos perfis de filiais convencionadas para atendimento REP-P.</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Save Company Form */}
+                <div className="bg-[#121829]/80 border border-gray-800/85 rounded-xl p-5 shadow h-fit space-y-4">
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">Nova Empresa / Filial</h3>
+                  <form onSubmit={handleAddCompany} className="space-y-3">
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1 font-mono">Razão Social / Nome</label>
+                      <input 
+                        type="text"
+                        value={compForm.nome}
+                        onChange={(e) => setCompForm(p => ({ ...p, nome: e.target.value }))}
+                        placeholder="Ex: SmartPoint Filial SP"
+                        className="w-full bg-gray-900 border border-gray-850 focus:border-blue-500 rounded-lg p-2.5 text-xs text-white outline-none"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1 font-mono">CNPJ da Filial</label>
+                      <input 
+                        type="text"
+                        value={compForm.cnpj}
+                        onChange={(e) => {
+                          let v = e.target.value.replace(/\D/g, "");
+                          if (v.length > 14) v = v.slice(0, 14);
+                          if (v.length > 12) v = `${v.slice(0, 2)}.${v.slice(2, 5)}.${v.slice(5, 8)}/${v.slice(8, 12)}-${v.slice(12)}`;
+                          else if (v.length > 8) v = `${v.slice(0, 2)}.${v.slice(2, 5)}.${v.slice(5, 8)}/${v.slice(8)}`;
+                          else if (v.length > 5) v = `${v.slice(0, 2)}.${v.slice(2, 5)}.${v.slice(5)}`;
+                          else if (v.length > 2) v = `${v.slice(0, 2)}.${v.slice(2)}`;
+                          setCompForm(p => ({ ...p, cnpj: v }));
+                        }}
+                        placeholder="00.000.000/0001-00"
+                        className="w-full bg-gray-900 border border-gray-850 focus:border-blue-500 rounded-lg p-2.5 text-xs text-white outline-none font-mono"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1 font-mono">Endereço Comercial</label>
+                      <input 
+                        type="text"
+                        value={compForm.endereco || ""}
+                        onChange={(e) => setCompForm(p => ({ ...p, endereco: e.target.value }))}
+                        placeholder="Av. Paulista, 1000 - Bela Vista"
+                        className="w-full bg-gray-900 border border-gray-850 focus:border-blue-500 rounded-lg p-2.5 text-xs text-white outline-none"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white rounded-lg cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Cadastrar Filial
+                    </button>
+                  </form>
+                </div>
+
+                {/* Companies List Table */}
+                <div className="lg:col-span-2 bg-[#121829]/50 border border-gray-800/85 rounded-xl overflow-hidden shadow">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead className="bg-[#182035]/80 text-gray-400 text-[10px] uppercase font-bold border-b border-gray-800">
+                      <tr>
+                        <th className="py-3 px-4">Filial / Nome</th>
+                        <th className="py-3 px-4 font-mono">CNPJ</th>
+                        <th className="py-3 px-4">Localização / Endereço</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-850/30">
+                      {companies.map((comp) => (
+                        <tr key={comp.id} className="hover:bg-gray-850/15 transition-all">
+                          <td className="py-3 px-4 font-bold text-white">{comp.nome}</td>
+                          <td className="py-3 px-4 font-mono text-gray-300">{comp.cnpj}</td>
+                          <td className="py-3 px-4 text-gray-400 truncate max-w-[160px]">{comp.endereco}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                              comp.status === 'ativo' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-800 text-gray-400'
+                            }`}>
+                              {comp.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            {comp.status === 'ativo' && (
+                              <button
+                                onClick={() => handleDeleteCompany(comp.id, comp.nome)}
+                                className="p-1 text-red-400 hover:bg-red-500/10 rounded cursor-pointer transition-all"
+                                title="Desativar Empresa"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {companies.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-gray-500">
+                            Nenhuma empresa cadastrada para multiempresa.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* Active Tab: Work Shifts Scales CRUD */}
+          {activeTab === 'escalas' && (
+            <div className="space-y-6 animate-fade-in">
+              <div>
+                <h2 className="text-xl font-bold text-white tracking-tight">Escalas & Parâmetros de Jornada ({escalas.length})</h2>
+                <p className="text-xs text-gray-400">Configure os turnos de trabalho para cálculo de atrasos, horas extras e limites de tolerâncias.</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Save Scale Form */}
+                <div className="bg-[#121829]/80 border border-gray-800/85 rounded-xl p-5 shadow h-fit space-y-4">
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">Nova Escala de Trabalho</h3>
+                  <form onSubmit={handleAddScale} className="space-y-3">
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1 font-mono">Nome da Escala</label>
+                      <input 
+                        type="text"
+                        value={scaleForm.nome}
+                        onChange={(e) => setScaleForm(p => ({ ...p, nome: e.target.value }))}
+                        placeholder="Ex: Administrativo Flex 44h"
+                        className="w-full bg-gray-900 border border-gray-850 focus:border-blue-500 rounded-lg p-2.5 text-xs text-white outline-none"
+                        required
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[9px] uppercase text-gray-400 mb-1">Entrada</label>
+                        <input 
+                          type="time" 
+                          value={scaleForm.entrada} 
+                          onChange={(e) => setScaleForm(p => ({ ...p, entrada: e.target.value }))} 
+                          className="w-full bg-gray-900 border border-gray-850 text-white rounded p-1.5 text-center text-xs" 
+                          required 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] uppercase text-gray-400 mb-1">Saída Almoço</label>
+                        <input 
+                          type="time" 
+                          value={scaleForm.almocoSaida} 
+                          onChange={(e) => setScaleForm(p => ({ ...p, almocoSaida: e.target.value }))} 
+                          className="w-full bg-gray-900 border border-gray-850 text-white rounded p-1.5 text-center text-xs" 
+                          required 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] uppercase text-gray-400 mb-1">Retorno Almoço</label>
+                        <input 
+                          type="time" 
+                          value={scaleForm.almocoRetorno} 
+                          onChange={(e) => setScaleForm(p => ({ ...p, almocoRetorno: e.target.value }))} 
+                          className="w-full bg-gray-900 border border-gray-850 text-white rounded p-1.5 text-center text-xs" 
+                          required 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] uppercase text-gray-400 mb-1">Saída Final</label>
+                        <input 
+                          type="time" 
+                          value={scaleForm.saida} 
+                          onChange={(e) => setScaleForm(p => ({ ...p, saida: e.target.value }))} 
+                          className="w-full bg-gray-900 border border-gray-850 text-white rounded p-1.5 text-center text-xs" 
+                          required 
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1 font-mono">Tolerância Geral (minutos)</label>
+                      <input 
+                        type="number"
+                        value={scaleForm.tolerancia}
+                        onChange={(e) => setScaleForm(p => ({ ...p, tolerancia: Number(e.target.value) }))}
+                        className="w-full bg-gray-900 border border-gray-850 focus:border-blue-500 rounded-lg p-2.5 text-xs text-white outline-none"
+                        required
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white rounded-lg cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Cadastrar Escala
+                    </button>
+                  </form>
+                </div>
+
+                {/* Scales list layout */}
+                <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 h-fit">
+                  {escalas.map((sc) => (
+                    <div key={sc.id} className="bg-[#121829]/50 border border-gray-800/80 rounded-xl p-4 shadow flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="text-xs font-bold text-white shrink-0 truncate max-w-[140px]">{sc.nome}</h4>
+                          <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded">
+                            Tolerância: {sc.tolerancia}m
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-400 font-mono py-2 bg-gray-950/20 p-2 rounded border border-gray-855/30">
+                          <div>Entrada: <b className="text-gray-200">{sc.entrada}</b></div>
+                          <div>S. Almoço: <b className="text-gray-200">{sc.almocoSaida}</b></div>
+                          <div>R. Almoço: <b className="text-gray-200">{sc.almocoRetorno}</b></div>
+                          <div>Saída F.: <b className="text-gray-200">{sc.saida}</b></div>
+                        </div>
+                      </div>
+                      <div className="flex justify-end pt-3 mt-2 border-t border-gray-850/40">
+                        <button
+                          onClick={() => handleDeleteScale(sc.id, sc.nome)}
+                          className="text-[10px] text-red-400 hover:bg-red-500/10 py-1 px-2.5 rounded cursor-pointer transition-all flex items-center gap-1"
+                        >
+                          <Trash2 className="h-3 w-3" /> Deletar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {escalas.length === 0 && (
+                    <div className="col-span-2 py-10 text-center text-gray-500 bg-[#121829]/40 rounded-xl border border-gray-800/70">
+                      Nenhuma jornada ou escala de horários configurada.
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )}
+
         </main>
 
       </div>
@@ -1221,24 +1616,70 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               </div>
 
+              {/* EMPRESA & ESCALA ASSOCIATIVA RELATIONS */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-300 uppercase tracking-wider mb-1">Empresa Associada</label>
+                  <select
+                    value={empForm.empresaId}
+                    onChange={(e) => setEmpForm(p => ({ ...p, empresaId: e.target.value }))}
+                    className="w-full bg-[#131b2d] border border-gray-850 focus:border-blue-500 text-xs text-white rounded-lg p-2.5 outline-none select:bg-slate-900"
+                  >
+                    <option value="">-- Selecione uma Empresa --</option>
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id} className="bg-slate-900">{c.nome} ({c.cnpj})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-300 uppercase tracking-wider mb-1">Escala Operacional de Trabalho</label>
+                  <select
+                    value={empForm.escalaId}
+                    onChange={(e) => {
+                      const selId = e.target.value;
+                      const selectedScale = escalas.find(s => s.id === selId);
+                      if (selectedScale) {
+                        setEmpForm(p => ({
+                          ...p,
+                          escalaId: selId,
+                          entrada: selectedScale.entrada,
+                          almocoSaida: selectedScale.almocoSaida,
+                          almocoRetorno: selectedScale.almocoRetorno,
+                          saida: selectedScale.saida
+                        }));
+                      } else {
+                        setEmpForm(p => ({ ...p, escalaId: selId }));
+                      }
+                    }}
+                    className="w-full bg-[#131b2d] border border-gray-850 focus:border-blue-500 text-xs text-white rounded-lg p-2.5 outline-none select:bg-slate-900"
+                  >
+                    <option value="">-- Personalizada / Padrão --</option>
+                    {escalas.map(s => (
+                      <option key={s.id} value={s.id} className="bg-slate-900">{s.nome} ({s.entrada} - {s.saida})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {/* ESCALAS DE JORNADA HORARIOS */}
               <div className="p-3 bg-gray-900/50 border border-gray-850/60 rounded-xl">
-                <p className="text-[10px] font-mono text-blue-400 uppercase tracking-widest font-semibold mb-2.5">Escala de Horários de Trabalho</p>
+                <p className="text-[10px] font-mono text-blue-400 uppercase tracking-widest font-semibold mb-2.5">Horários de Trabalho Ativos (REP-P)</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <div>
                     <label className="block text-[9px] text-gray-400 mb-0.5">Entrada</label>
                     <input type="time" value={empForm.entrada} onChange={(e) => setEmpForm(p=>({ ...p, entrada: e.target.value }))} className="w-full bg-[#131b2d] border border-gray-850 text-white p-1 rounded font-mono text-center tracking-wider" />
                   </div>
                   <div>
-                    <label className="block text-[9px] text-gray-400 mb-0.5">Almoço (Saída)</label>
+                    <label className="block text-[9px] text-gray-400 mb-0.5 font-sans">Almoço (S)</label>
                     <input type="time" value={empForm.almocoSaida} onChange={(e) => setEmpForm(p=>({ ...p, almocoSaida: e.target.value }))} className="w-full bg-[#131b2d] border border-gray-850 text-white p-1 rounded font-mono text-center tracking-wider" />
                   </div>
                   <div>
-                    <label className="block text-[9px] text-gray-400 mb-0.5">Almoço (Retorno)</label>
+                    <label className="block text-[9px] text-gray-400 mb-0.5 font-sans">Almoço (R)</label>
                     <input type="time" value={empForm.almocoRetorno} onChange={(e) => setEmpForm(p=>({ ...p, almocoRetorno: e.target.value }))} className="w-full bg-[#131b2d] border border-gray-850 text-white p-1 rounded font-mono text-center tracking-wider" />
                   </div>
                   <div>
-                    <label className="block text-[9px] text-gray-400 mb-0.5">Saída Final</label>
+                    <label className="block text-[9px] text-gray-400 mb-0.5 font-sans">Saída Final</label>
                     <input type="time" value={empForm.saida} onChange={(e) => setEmpForm(p=>({ ...p, saida: e.target.value }))} className="w-full bg-[#131b2d] border border-gray-850 text-white p-1 rounded font-mono text-center tracking-wider" />
                   </div>
                 </div>

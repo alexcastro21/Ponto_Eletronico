@@ -2,12 +2,33 @@
  * SmartPoint Web - TypeScript Types Definition
  */
 
+export interface Company {
+  id: string;
+  nome: string;
+  cnpj: string;
+  endereco: string;
+  status: 'ativo' | 'inativo';
+}
+
+export interface Scale {
+  id: string;
+  nome: string;
+  cargaHoraria: string;
+  entrada: string; // e.g. "08:00"
+  almocoSaida: string; // e.g. "12:00"
+  almocoRetorno: string; // e.g. "13:00"
+  saida: string; // e.g. "17:00"
+  tolerancia: number; // in minutes
+}
+
 export interface Employee {
   id: string;
   nome: string;
   cpf: string;
   cargo: string;
   setor: string;
+  empresaId?: string; // Multi-company relation
+  escalaId?: string; // Workplace shift hours relation
   entrada: string; // e.g. "08:00"
   almocoSaida: string; // e.g. "12:00"
   almocoRetorno: string; // e.g. "13:00"
@@ -30,6 +51,11 @@ export interface TimeLog {
   fotoUrl: string; // Frame captured at verification
   confidence: number;
   matched: boolean;
+  empresaId?: string; // Company log link
+  ip?: string; // Clock-in device IP
+  liveness?: string; // Verification tag
+  gps?: string; // Location metrics
+  hash?: string; // Cryptographic SHA-256 signature
 }
 
 export interface SystemConfig {
@@ -63,6 +89,8 @@ export interface SystemLog {
 }
 
 export interface DatabaseState {
+  companies: Company[];
+  escalas: Scale[];
   employees: Employee[];
   logs: TimeLog[];
   config: SystemConfig;
