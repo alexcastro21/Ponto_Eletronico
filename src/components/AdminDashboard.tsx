@@ -56,7 +56,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     saida: "17:00",
     fotoUrl: "",
     empresaId: "",
-    escalaId: ""
+    escalaId: "",
+    assinaturaDigital: ""
   });
   const [rawPhotoUpload, setRawPhotoUpload] = useState<string | null>(null);
   const [usingCameraForProfile, setUsingCameraForProfile] = useState(false);
@@ -338,7 +339,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       saida: emp.saida,
       fotoUrl: emp.fotoUrl,
       empresaId: emp.empresaId || "",
-      escalaId: emp.escalaId || ""
+      escalaId: emp.escalaId || "",
+      assinaturaDigital: emp.assinaturaDigital || ""
     });
     setRawPhotoUpload(emp.fotoUrl && emp.fotoUrl.startsWith("data:") ? emp.fotoUrl : null);
     setIsEmployeeModalOpen(true);
@@ -446,7 +448,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       saida: "17:00",
       fotoUrl: "",
       empresaId: "",
-      escalaId: ""
+      escalaId: "",
+      assinaturaDigital: ""
     });
     setRawPhotoUpload(null);
     stopProfileCamera();
@@ -570,98 +573,98 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       {/* Frame content layout */}
       <div className="flex-1 flex max-w-7xl w-full mx-auto p-4 md:p-6 gap-6 flex-col md:flex-row relative">
         
-        {/* Sidebar Navigation */}
-        <aside className="w-full md:w-64 bg-gray-900/40 border border-gray-850/60 rounded-xl p-4 shrink-0 flex flex-col space-y-1.5 h-fit backdrop-blur-sm shadow-xl">
-          <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest px-3.5 py-1 mb-2">GERAL</span>
+        {/* Sidebar Navigation - horizontal scrolling list on mobile, vertical sidebar on desktop */}
+        <aside className="w-full md:w-64 bg-gray-900/40 border border-gray-850/60 rounded-xl p-3 md:p-4 shrink-0 flex flex-row md:flex-col overflow-x-auto md:overflow-visible whitespace-nowrap md:whitespace-normal space-x-2 md:space-x-0 md:space-y-1.5 h-fit backdrop-blur-sm shadow-xl pb-4 md:pb-4">
+          <span className="hidden md:inline-block text-[10px] font-mono text-gray-500 uppercase tracking-widest px-3.5 py-1 mb-2">GERAL</span>
           
           <button
             onClick={() => setActiveTab('overview')}
-            className={`w-full text-left text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 ${
+            className={`text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 shrink-0 w-auto md:w-full ${
               activeTab === 'overview' ? "bg-blue-600 text-white font-bold" : "text-gray-400 hover:text-white hover:bg-gray-850/50"
             }`}
           >
-            <LayoutDashboard className="h-4.5 w-4.5" />
+            <LayoutDashboard className="h-4.5 w-4.5 shrink-0" />
             Visão Geral / Métricas
           </button>
 
           <button
             onClick={() => setActiveTab('employees')}
-            className={`w-full text-left text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 ${
+            className={`text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 shrink-0 w-auto md:w-full ${
               activeTab === 'employees' ? "bg-blue-600 text-white font-bold" : "text-gray-400 hover:text-white hover:bg-gray-850/50"
             }`}
           >
-            <Users className="h-4.5 w-4.5" />
+            <Users className="h-4.5 w-4.5 shrink-0" />
             Gestão Funcionários
           </button>
 
           <button
             onClick={() => setActiveTab('logs')}
-            className={`w-full text-left text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 ${
+            className={`text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 shrink-0 w-auto md:w-full ${
               activeTab === 'logs' ? "bg-blue-600 text-white font-bold" : "text-gray-400 hover:text-white hover:bg-gray-850/50"
             }`}
           >
-            <Clock className="h-4.5 w-4.5" />
+            <Clock className="h-4.5 w-4.5 shrink-0" />
             Histórico de Pontos
           </button>
 
-          <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest px-3.5 py-1 mt-4 mb-2">SOLICITAÇÕES</span>
+          <span className="hidden md:inline-block text-[10px] font-mono text-gray-500 uppercase tracking-widest px-3.5 py-1 mt-4 mb-2">SOLICITAÇÕES</span>
 
           <button
             onClick={() => setActiveTab('ajustes')}
-            className={`w-full text-left text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center justify-between ${
+            className={`text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center justify-between shrink-0 w-auto md:w-full ${
               activeTab === 'ajustes' ? "bg-blue-600 text-white font-bold" : "text-gray-400 hover:text-white hover:bg-gray-850/50"
             }`}
           >
             <div className="flex items-center gap-2.5">
-              <CheckSquare className="h-4.5 w-4.5" />
+              <CheckSquare className="h-4.5 w-4.5 shrink-0" />
               Ajustes de Ponto
             </div>
             {ajustes.filter(a => a.status === 'pendente').length > 0 && (
-              <span className="text-[9px] font-semibold bg-indigo-500 text-white py-0.5 px-1.5 rounded-full ring-2 ring-gray-900 shrink-0">
+              <span className="text-[9px] font-semibold bg-indigo-500 text-white py-0.5 px-1.5 rounded-full ring-2 ring-gray-900 shrink-0 ml-1.5">
                 {ajustes.filter(a => a.status === 'pendente').length}
               </span>
             )}
           </button>
 
-          <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest px-3.5 py-1 mt-4 mb-2">GERENCIAMENTO</span>
+          <span className="hidden md:inline-block text-[10px] font-mono text-gray-500 uppercase tracking-widest px-3.5 py-1 mt-4 mb-2">GERENCIAMENTO</span>
 
           <button
             onClick={() => setActiveTab('settings')}
-            className={`w-full text-left text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 ${
+            className={`text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 shrink-0 w-auto md:w-full ${
               activeTab === 'settings' ? "bg-blue-600 text-white font-bold" : "text-gray-400 hover:text-white hover:bg-gray-850/50"
             }`}
           >
-            <Settings className="h-4.5 w-4.5" />
+            <Settings className="h-4.5 w-4.5 shrink-0" />
             Regras & Tolerâncias
           </button>
 
           <button
             onClick={() => setActiveTab('companies')}
-            className={`w-full text-left text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 ${
+            className={`text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 shrink-0 w-auto md:w-full ${
               activeTab === 'companies' ? "bg-blue-600 text-white font-bold" : "text-gray-400 hover:text-white hover:bg-gray-850/50"
             }`}
           >
-            <Database className="h-4.5 w-4.5 text-blue-400" />
+            <Database className="h-4.5 w-4.5 text-blue-400 shrink-0" />
             Cadastros de Empresas
           </button>
 
           <button
             onClick={() => setActiveTab('escalas')}
-            className={`w-full text-left text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 ${
+            className={`text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 shrink-0 w-auto md:w-full ${
               activeTab === 'escalas' ? "bg-blue-600 text-white font-bold" : "text-gray-400 hover:text-white hover:bg-gray-850/50"
             }`}
           >
-            <Sliders className="h-4.5 w-4.5 text-indigo-400" />
+            <Sliders className="h-4.5 w-4.5 text-indigo-400 shrink-0" />
             Escalas de Jornada
           </button>
 
           <button
             onClick={() => setActiveTab('audit')}
-            className={`w-full text-left text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 ${
+            className={`text-xs font-semibold py-2 px-3.5 rounded-lg transition-all flex items-center gap-2.5 shrink-0 w-auto md:w-full ${
               activeTab === 'audit' ? "bg-blue-600 text-white font-bold" : "text-gray-400 hover:text-white hover:bg-gray-850/50"
             }`}
           >
-            <FileText className="h-4.5 w-4.5" />
+            <FileText className="h-4.5 w-4.5 shrink-0" />
             Logs de Auditoria
           </button>
         </aside>
@@ -851,9 +854,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 />
               </div>
 
+              {/* Mobile Swipe Hint */}
+              <div className="sm:hidden flex items-center gap-1.5 p-2.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-lg text-[11px] animate-pulse">
+                <span>↔</span>
+                <p><b>Dica responsiva:</b> Deslize a tabela para a direita se quiser acessar as ações de <b>Editar</b> e <b>Apagar</b>.</p>
+              </div>
+
               {/* Employee Grid/Table */}
-              <div className="bg-[#121829] border border-gray-800/80 rounded-xl overflow-hidden shadow-lg mt-4">
-                <table className="w-full text-left text-xs border-collapse divide-y divide-gray-850/60">
+              <div className="bg-[#121829] border border-gray-800/80 rounded-xl overflow-hidden shadow-lg mt-4 w-full">
+                <div className="overflow-x-auto w-full">
+                  <table className="w-full text-left text-xs border-collapse divide-y divide-gray-850/60 min-w-[720px]">
                   <thead className="bg-[#182035]/80 text-gray-400 font-mono text-[10px] uppercase">
                     <tr>
                       <th className="py-3.5 px-4 font-bold">Biometria</th>
@@ -920,6 +930,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </tbody>
                 </table>
               </div>
+            </div>
 
             </div>
           )}
@@ -1001,63 +1012,65 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
               </div>
 
               {/* Point registers Table list */}
-              <div className="bg-[#121829] border border-gray-800/80 rounded-xl overflow-hidden shadow-lg mt-2">
-                <table className="w-full text-left text-xs border-collapse divide-y divide-gray-850/60">
-                  <thead className="bg-[#182035]/80 text-gray-400 font-mono text-[10px] uppercase">
-                    <tr>
-                      <th className="py-3 px-4">Webcam Bio</th>
-                      <th className="py-3 px-4">Nome completo / CPF</th>
-                      <th className="py-3 px-4">Marca</th>
-                      <th className="py-3 px-4">Data / Hora</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4 text-right">Confiança IA</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-850/40">
-                    {filteredLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-gray-850/15 transition-all text-xs">
-                        <td className="py-2.5 px-4 shrink-0">
-                          <img 
-                            src={log.fotoUrl} 
-                            alt="Captured verification" 
-                            className="h-9 w-9 rounded-md bg-gray-950 border border-gray-800 object-cover shadow-sm select-none shrink-0"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
-                            }}
-                          />
-                        </td>
-                        <td className="py-2.5 px-4">
-                          <span className="font-bold text-white block">{log.nome}</span>
-                          <span className="font-mono text-gray-400 text-[10px]">{log.cpf}</span>
-                        </td>
-                        <td className="py-2.5 px-4 font-semibold text-blue-400">
-                          {log.tipo === 'entrada' ? 'Entrada' : log.tipo === 'saida_final' ? 'Saída Final' : log.tipo === 'almoco_saida' ? 'Almoço (Saída)' : 'Almoço (Retorno)'}
-                        </td>
-                        <td className="py-2.5 px-4">
-                          <p className="font-semibold text-gray-200 font-mono">{log.data.split("-").reverse().join("/")}</p>
-                          <p className="text-gray-400 font-mono text-[10px] mt-0.5">{log.hora}</p>
-                        </td>
-                        <td className="py-2.5 px-4">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
-                            log.status === 'atrasado' ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                          }`}>
-                            {log.status === 'atrasado' ? "Atrasado" : "No Prazo"}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-4 text-right">
-                          <span className="font-mono text-gray-300">{(log.confidence * 100).toFixed(0)}%</span>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredLogs.length === 0 && (
+              <div className="bg-[#121829] border border-gray-800/80 rounded-xl overflow-hidden shadow-lg mt-2 w-full">
+                <div className="overflow-x-auto w-full">
+                  <table className="w-full text-left text-xs border-collapse divide-y divide-gray-850/60 min-w-[725px]">
+                    <thead className="bg-[#182035]/80 text-gray-400 font-mono text-[10px] uppercase">
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-gray-500">
-                          Nenhum registro de ponto registrado com os filtros ativos.
-                        </td>
+                        <th className="py-3 px-4">Webcam Bio</th>
+                        <th className="py-3 px-4">Nome completo / CPF</th>
+                        <th className="py-3 px-4">Marca</th>
+                        <th className="py-3 px-4">Data / Hora</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Confiança IA</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-850/40">
+                      {filteredLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-gray-850/15 transition-all text-xs">
+                          <td className="py-2.5 px-4 shrink-0">
+                            <img 
+                              src={log.fotoUrl} 
+                              alt="Captured verification" 
+                              className="h-9 w-9 rounded-md bg-gray-950 border border-gray-800 object-cover shadow-sm select-none shrink-0"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+                              }}
+                            />
+                          </td>
+                          <td className="py-2.5 px-4">
+                            <span className="font-bold text-white block">{log.nome}</span>
+                            <span className="font-mono text-gray-400 text-[10px]">{log.cpf}</span>
+                          </td>
+                          <td className="py-2.5 px-4 font-semibold text-blue-400">
+                            {log.tipo === 'entrada' ? 'Entrada' : log.tipo === 'saida_final' ? 'Saída Final' : log.tipo === 'almoco_saida' ? 'Almoço (Saída)' : 'Almoço (Retorno)'}
+                          </td>
+                          <td className="py-2.5 px-4">
+                            <p className="font-semibold text-gray-200 font-mono">{log.data.split("-").reverse().join("/")}</p>
+                            <p className="text-gray-400 font-mono text-[10px] mt-0.5">{log.hora}</p>
+                          </td>
+                          <td className="py-2.5 px-4">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
+                              log.status === 'atrasado' ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            }`}>
+                              {log.status === 'atrasado' ? "Atrasado" : "No Prazo"}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-4 text-right">
+                            <span className="font-mono text-gray-300">{(log.confidence * 100).toFixed(0)}%</span>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredLogs.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-gray-500">
+                            Nenhum registro de ponto registrado com os filtros ativos.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
             </div>
@@ -1614,6 +1627,21 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     className="w-full bg-[#131b2d] border border-gray-850 hover:border-gray-800 focus:border-blue-500 text-xs text-white rounded-lg p-2.5 outline-none"
                   />
                 </div>
+              </div>
+
+              {/* INDIVIDUAL DIGITAL SIGNATURE KEY */}
+              <div className="p-3 bg-gray-900/45 border border-gray-850 rounded-xl space-y-1">
+                <label className="block text-[10px] font-bold text-gray-300 uppercase tracking-wider font-mono">
+                  Assinatura Eletrônica / Chave Digital (ICP-Brasil)
+                </label>
+                <input
+                  type="text"
+                  value={empForm.assinaturaDigital}
+                  onChange={(e) => setEmpForm(p => ({ ...p, assinaturaDigital: e.target.value }))}
+                  placeholder="Ex: sha256_icp_brasil_certificate_token..."
+                  className="w-full bg-[#131b2d] border border-gray-850 hover:border-gray-800 focus:border-blue-500 text-xs text-white rounded-lg p-2.5 outline-none font-mono text-gray-300"
+                />
+                <p className="text-[9px] text-gray-500">Chave pública de infraestrutura ICP-Brasil associada a este funcionário para emissão e validação fiscal do comprovante fiscal REP-P.</p>
               </div>
 
               {/* EMPRESA & ESCALA ASSOCIATIVA RELATIONS */}

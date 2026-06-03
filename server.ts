@@ -377,7 +377,7 @@ app.get("/api/employees", (req, res) => {
 // Register new Employee (CRUD - Create)
 app.post("/api/employees", (req, res) => {
   const db = readDB();
-  const { nome, cpf, cargo, setor, entrada, almocoSaida, almocoRetorno, saida, fotoUrl } = req.body;
+  const { nome, cpf, cargo, setor, entrada, almocoSaida, almocoRetorno, saida, fotoUrl, empresaId, escalaId, assinaturaDigital } = req.body;
 
   if (!nome || !cpf) {
     return res.status(400).json({ error: "Nome e CPF são obrigatórios." });
@@ -400,6 +400,9 @@ app.post("/api/employees", (req, res) => {
     almocoRetorno: almocoRetorno || "13:00",
     saida: saida || "17:00",
     fotoUrl: fotoUrl || defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)],
+    empresaId: empresaId || "",
+    escalaId: escalaId || "",
+    assinaturaDigital: assinaturaDigital || "",
     status: "ativo",
     createdAt: new Date().toISOString()
   };

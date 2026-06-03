@@ -36,6 +36,7 @@ export interface Employee {
   fotoUrl: string; // Base64 registered facial profile
   status: 'ativo' | 'inativo';
   createdAt: string;
+  assinaturaDigital?: string; // ICP-Brasil electronic key / digital signature certificate
 }
 
 export type TimeLogType = 'entrada' | 'almoco_saida' | 'almoco_retorno' | 'saida_final';

@@ -34,6 +34,7 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
+  const [showSimulador, setShowSimulador] = useState(false);
 
   // Liveness progress simulator
   const [livenessProgress, setLivenessProgress] = useState(0);
@@ -473,7 +474,7 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
               REPOSITÓRIO SEGURO
             </div>
 
-            <p className="text-[10px] text-gray-400 font-mono tracking-widest uppercase mb-1">HORÁRIO DE JORNADA OFICIAL</p>
+            <p className="text-[10px] text-gray-400 font-mono tracking-widest uppercase mb-1 font-sans">HORÁRIO DE JORNADA OFICIAL</p>
             <div className="text-5xl font-black tracking-tight text-white font-mono mb-2">
               {timeState.toLocaleTimeString('pt-BR', { hour12: false })}
             </div>
@@ -483,60 +484,22 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
             </div>
           </div>
 
-          {/* Biometrics Simulator Selection panel for reviewers (Mandatory to avoid roadblock) */}
-          <div className="bg-[#0b101d] border border-blue-900/20 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-xl"></div>
-            <div className="flex items-center gap-2 mb-3">
-              <Smartphone className="h-4 w-4 text-blue-400" />
-              <h3 className="text-xs font-bold text-blue-300 uppercase tracking-wide">Simulador de Identificação</h3>
-            </div>
-            <p className="text-[11px] text-gray-400 leading-relaxed mb-3">
-              Como biometria real 1-para-Muitos exige fotos reais, selecione um funcionário abaixo para treinar a IA e simular a fisionomia na câmera:
-            </p>
-            
-            <div className="space-y-1.5">
-              {employees.filter(e => e.status === "ativo").map((emp) => (
-                <button
-                  key={emp.id}
-                  onClick={() => {
-                    setSimulationCpf(emp.cpf);
-                    // Also reload state if scanned previously
-                    if (step !== 'scanning') handleReset();
-                  }}
-                  className={`w-full py-1.5 px-3 rounded-lg text-left text-xs transition-all flex items-center justify-between border ${
-                    simulationCpf === emp.cpf
-                      ? "bg-blue-600/10 border-blue-500 text-blue-100 font-semibold"
-                      : "bg-gray-900/30 border-gray-850 text-gray-400 hover:bg-gray-900/70"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <div className="h-5 w-5 rounded-full overflow-hidden shrink-0 bg-gray-800">
-                      <img src={emp.fotoUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                    </div>
-                    <span className="truncate">{emp.nome.split(" ")[0]} {emp.nome.split(" ").slice(-1)[0]}</span>
-                  </div>
-                  <span className="text-[9px] text-gray-500 font-mono tracking-wider">{emp.cargo.split(" ")[0]}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* LGPD compliance block */}
-            {showDisclaimer && (
-              <div className="mt-4 p-3 rounded-xl bg-gray-900/70 border border-gray-800 text-[10px] text-gray-400 leading-relaxed relative">
-                <button 
-                  onClick={() => setShowDisclaimer(false)}
-                  className="absolute right-1 text-gray-500 hover:text-white px-2 cursor-pointer"
-                >
-                  ×
-                </button>
-                <div className="font-bold flex items-center gap-1 text-emerald-400 mb-0.5">
-                  <ShieldCheck className="h-3 w-3 text-emerald-400" />
-                  Consentimento e LGPD
-                </div>
-                Ao posicionar seu rosto no terminal, você concorda com o processamento biométrico para fins exclusivos de monitoramento de jornada profissional, nos termos da Lei nº 13.709 (LGPD) e Portaria 671 MTE.
+          {/* LGPD compliance block rendered cleanly aligned on side layout */}
+          {showDisclaimer && (
+            <div className="p-4 rounded-2xl bg-gray-900/40 border border-gray-850 text-xs text-gray-400 leading-relaxed relative shadow-md">
+              <button 
+                onClick={() => setShowDisclaimer(false)}
+                className="absolute right-3 top-2.5 text-gray-400 hover:text-white px-2 cursor-pointer text-sm font-bold"
+              >
+                ×
+              </button>
+              <div className="font-bold flex items-center gap-2 text-emerald-400 mb-1.5 font-sans uppercase text-[10px] tracking-wider">
+                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                Consentimento e LGPD
               </div>
-            )}
-          </div>
+              Ao posicionar seu rosto no terminal de identificação, você consente com o processamento biométrico facial para fins exclusivos de marcação de jornada profissional, em conformidade com a Lei Geral de Proteção de Dados (LGPD - nº 13.709) e a Portaria 671 MTE.
+            </div>
+          )}
 
         </div>
 
@@ -557,8 +520,8 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
                   <p className="text-xs text-gray-400 mt-1">O motor neural da IA localizará seu cadastro e batida automaticamente</p>
                 </div>
 
-                {/* Webcam/Interactive frame wrapper */}
-                <div className="w-full aspect-video bg-[#05070e] rounded-2xl border border-gray-850 hover:border-blue-900/40 relative overflow-hidden flex flex-col items-center justify-center transition-all">
+                {/* Webcam/Interactive frame wrapper in vertical portrait format */}
+                <div className="w-full max-w-[325px] aspect-[3/4] bg-[#05070e] rounded-2xl border border-gray-850 hover:border-blue-900/40 relative overflow-hidden flex flex-col items-center justify-center transition-all mx-auto shadow-2xl">
                   
                   {hasCamera ? (
                     <>
@@ -581,8 +544,8 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
                         
                         {/* Live circular bio reticle */}
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-48 h-48 border border-blue-500/30 rounded-full animate-[pulse_2s_infinite] flex items-center justify-center relative">
-                            <span className="text-[8px] font-mono text-blue-400 bg-gray-950/70 border border-blue-900/30 px-2 py-0.5 rounded tracking-widest animate-pulse font-bold">
+                          <div className="w-36 h-36 border border-blue-500/25 rounded-full animate-[pulse_2s_infinite] flex items-center justify-center relative">
+                            <span className="text-[8px] font-mono text-blue-400 bg-gray-950/75 border border-blue-900/40 px-2 py-0.5 rounded tracking-widest animate-pulse font-bold text-center">
                               BIO FACE SCANNER
                             </span>
                           </div>
@@ -590,15 +553,29 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
                       </div>
                     </>
                   ) : (
-                    <div className="flex flex-col items-center p-8 text-center space-y-4">
-                      <div className="h-16 w-16 rounded-3xl bg-blue-500/10 border border-blue-500/10 flex items-center justify-center text-blue-400 shadow-inner">
-                        <Camera className="h-8 w-8" />
+                    <div className="flex flex-col items-center p-5 text-center space-y-4 w-full">
+                      <div className="h-12 w-12 rounded-3xl bg-blue-500/10 border border-blue-500/15 flex items-center justify-center text-blue-400 shadow-inner shrink-0">
+                        <Camera className="h-6 w-6" />
                       </div>
-                      <div>
-                        <h4 className="text-md font-bold text-white">Câmera em Modo Sandbox</h4>
-                        <p className="text-xs text-gray-400 max-w-sm leading-relaxed mt-1">
-                          Terminal ativo. Clique abaixo para simular a captura e identificação instantânea da fisionomia do colaborador selecionado no painel à esquerda.
+                      <div className="px-2">
+                        <h4 className="text-sm font-bold text-white">Biometria Sandbox</h4>
+                        <p className="text-[11px] text-gray-400 max-w-[210px] leading-relaxed mt-1 mx-auto">
+                          Dispositivo pronto para homologação. Selecione o colaborador abaixo para simular a leitura facial:
                         </p>
+                      </div>
+                      <div className="w-full px-4 pt-1 z-20">
+                        <select
+                          value={simulationCpf}
+                          onChange={(e) => setSimulationCpf(e.target.value)}
+                          className="w-full bg-[#131b2d] border border-gray-850 hover:border-gray-700 text-xs text-white rounded-xl p-2.5 outline-none font-sans cursor-pointer text-center"
+                        >
+                          <option value="" disabled>-- Selecione um Funcionário --</option>
+                          {employees.filter(e => e.status === "ativo").map((emp) => (
+                            <option key={emp.id} value={emp.cpf}>
+                              {emp.nome} ({emp.cargo || "Funcionário"})
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   )}
