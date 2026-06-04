@@ -58,6 +58,7 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize terminal data dependencies
   useEffect(() => {
@@ -80,11 +81,8 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
         setCompanies(data.companies || []);
         setEscalas(data.escalas || []);
         
-        // Auto-select first active employee as standard simulation target
-        const actives = (data.employees || []).filter((e: any) => e.status === "ativo");
-        if (actives.length > 0) {
-          setSimulationCpf(actives[0].cpf);
-        }
+        // Do not auto-select any employee as default layout target to avoid accidental false identity matches
+        setSimulationCpf("");
       }
     } catch (err) {
       console.error("Erro ao carregar dados do terminal:", err);
@@ -209,106 +207,208 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
     return Math.sqrt(sumSq);
   };
 
-  // Launch One-to-Many biometric identification flow
+  // Core Reusable Biometric Identification Engine (1:N matching)
+  const runIdentificationWithPhoto = async (photoDataUri: string, forcedCpf?: string) => {
+    if (!photoDataUri) {
+      throw new Error("Foto capturada ou informada é inválida para identificação.");
+    }
+
+    // Compute client-side smart biometric mapping matching real registered photographs
+    let clientMatchedCpf = forcedCpf || "";
+
+    if (!clientMatchedCpf) {
+      const customPhotoEmployees = employees.filter(e => 
+        e.status === "ativo" &&
+        e.fotoUrl && e.fotoUrl.startsWith("data:image/") && !e.fotoUrl.toLowerCase().includes("svg")
+      );
+
+      if (customPhotoEmployees.length > 0) {
+        // 1. Try exact string matching of base64 data (100% precise, zero-cost, perfect for uploaded or selected files)
+        const exactMatch = customPhotoEmployees.find(emp => emp.fotoUrl === photoDataUri);
+        if (exactMatch) {
+          clientMatchedCpf = exactMatch.cpf;
+        } else {
+          // 2. Fall back to mathematical visual fingerprint mapping
+          try {
+            const capturedFp = await getVisualFingerprint(photoDataUri);
+            if (capturedFp.length > 0) {
+              let minDistance = Infinity;
+              let bestCpf = "";
+              for (const emp of customPhotoEmployees) {
+                const empFp = await getVisualFingerprint(emp.fotoUrl);
+                const dist = calculateDistance(capturedFp, empFp);
+                if (dist < minDistance) {
+                  minDistance = dist;
+                  bestCpf = emp.cpf;
+                }
+              }
+              // Set a strict threshold (e.g. 150) so that random or different faces are correctly rejected
+              if (bestCpf && minDistance < 150) {
+                clientMatchedCpf = bestCpf;
+              }
+            }
+          } catch (err) {
+            console.warn("Erro ao calcular mapeamento fisionômico local:", err);
+          }
+        }
+      }
+    }
+
+    // Query 1-to-Many smart identifier endpoint
+    const targetCpfToSimulate = forcedCpf || simulationCpf;
+    const res = await fetch("/api/ponto/identify-face", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        capturedFrame: photoDataUri,
+        simulatedCpf: targetCpfToSimulate || "", // Sandbox helper
+        clientMatchedCpf: clientMatchedCpf
+      })
+    });
+
+    const responseData = await res.json();
+    if (!res.ok) {
+      throw new Error(responseData.error || "Nenhum perfil facial compatível.");
+    }
+
+    if (!responseData.matched || !responseData.employee) {
+      playBeep(false);
+      setStep('error');
+      setErrorMsg(responseData.reason || "Não foi possível reconhecer sua biometria facial. Verifique o posicionamento do rosto.");
+      return;
+    }
+
+    // Found candidate employee! Store metadata.
+    setIdentifiedEmployee(responseData.employee);
+    setRecognitionResult({
+      matched: responseData.matched,
+      confidence: responseData.confidence,
+      reason: responseData.reason
+    });
+
+    // Go to Anti-Spoofing and Liveness Challenge
+    setStep('liveness');
+    setLivenessProgress(0);
+    setLivenessTask("piscar");
+  };
+
+  // Handler for custom terminal photo upload if camera is blocked in iframe
+  const handleTerminalPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setErrorMsg("Imagens para reconhecimento facial devem ser menores que 2MB.");
+        setStep('error');
+        return;
+      }
+      setLoading(true);
+      setErrorMsg("");
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        if (event.target?.result) {
+          const b64 = event.target.result as string;
+          setCapturedImage(b64);
+          try {
+            await runIdentificationWithPhoto(b64);
+          } catch (err: any) {
+            playBeep(false);
+            setErrorMsg(err.message || "Erro no reconhecimento facial pelo arquivo enviado.");
+            setStep('error');
+          } finally {
+            setLoading(false);
+          }
+        }
+      };
+      reader.onerror = () => {
+        setLoading(false);
+        setErrorMsg("Erro ao ler arquivo da imagem de rosto.");
+        setStep('error');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Handler to simulate a specific registered user presenting their face to the camera
+  const handleSimulatedIdentify = async (selectedCpf: string) => {
+    if (!selectedCpf) return;
+    const emp = employees.find(e => e.cpf === selectedCpf);
+    if (!emp || !emp.fotoUrl) {
+      setErrorMsg("O colaborador selecionado não possui uma foto de perfil válida para apresentar.");
+      setStep('error');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMsg("");
+    setCapturedImage(emp.fotoUrl);
+
+    try {
+      await runIdentificationWithPhoto(emp.fotoUrl, selectedCpf);
+    } catch (err: any) {
+      playBeep(false);
+      setErrorMsg(err.message || "Erro no reconhecimento facial simulado.");
+      setStep('error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Launch One-to-Many physical biometric hardware identification flow
   const handleScanIdentification = async () => {
     setLoading(true);
     setErrorMsg("");
 
     let photoDataUri = "";
 
-    // 1. Capture base64 from stream if available
+    // Capture base64 from video stream if active and producing frames
+    let capturedFromCam = false;
     if (hasCamera && videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.scale(-1, 1); // mirror reflection
-        ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
-        photoDataUri = canvas.toDataURL("image/jpeg", 0.85);
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.scale(-1, 1); // mirror reflection
+          ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+          photoDataUri = canvas.toDataURL("image/jpeg", 0.85);
+          if (photoDataUri && photoDataUri.length > 500) {
+            capturedFromCam = true;
+          }
+        }
       }
-    } else {
-      // Offline/Simulator fallback: automatically grab the first custom photo employee registered in the system
-      const customPhotoActive = employees.find(e => 
-        e.status === "ativo" &&
-        e.fotoUrl && e.fotoUrl.startsWith("data:image/") && !e.fotoUrl.toLowerCase().includes("svg")
-      );
-      photoDataUri = customPhotoActive?.fotoUrl || "";
+    }
+
+    if (!photoDataUri) {
+      if (!hasCamera && simulationCpf) {
+        const emp = employees.find(e => e.cpf === simulationCpf);
+        if (emp && emp.fotoUrl) {
+          photoDataUri = emp.fotoUrl;
+          capturedFromCam = true;
+        }
+      }
+    }
+
+    if (!photoDataUri) {
+      setLoading(false);
+      playBeep(false);
+      setStep('error');
+      if (!hasCamera) {
+        setErrorMsg("Presença facial não detectada no simulador sandbox. Por favor, selecione um funcionário no painel de simulação 'Apresentar Rosto' para realizar o reconhecimento facial.");
+      } else {
+        setErrorMsg("Falha na captura da webcam. Certifique-se de que a câmera está conectada e com permissão ativa no navegador para realizar o reconhecimento facial.");
+      }
+      return;
     }
 
     setCapturedImage(photoDataUri);
 
-    // Compute client-side smart biometric mapping matching real registered photographs
-    let clientMatchedCpf = "";
-    const customPhotoEmployees = employees.filter(e => 
-      e.status === "ativo" &&
-      e.fotoUrl && e.fotoUrl.startsWith("data:image/") && !e.fotoUrl.toLowerCase().includes("svg")
-    );
-
-    if (customPhotoEmployees.length > 0) {
-      try {
-        const capturedFp = await getVisualFingerprint(photoDataUri);
-        if (capturedFp.length > 0) {
-          let minDistance = Infinity;
-          let bestCpf = "";
-          for (const emp of customPhotoEmployees) {
-            const empFp = await getVisualFingerprint(emp.fotoUrl);
-            const dist = calculateDistance(capturedFp, empFp);
-            if (dist < minDistance) {
-              minDistance = dist;
-              bestCpf = emp.cpf;
-            }
-          }
-          if (bestCpf && minDistance < 2400) { // Keep threshold generous for demo validation and wider compatibility
-            clientMatchedCpf = bestCpf;
-          }
-        }
-      } catch (err) {
-        console.warn("Erro ao calcular mapeamento fisionômico local:", err);
-      }
-    }
-
     try {
-      // 2. Query 1-to-Many smart identifier
-      const res = await fetch("/api/ponto/identify-face", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          capturedFrame: photoDataUri,
-          simulatedCpf: simulationCpf, // Sandbox helper
-          clientMatchedCpf: clientMatchedCpf
-        })
-      });
-
-      const responseData = await res.json();
-      if (!res.ok) {
-        throw new Error(responseData.error || "Nenhum perfil facial compatível.");
-      }
-
-      if (!responseData.matched || !responseData.employee) {
-        playBeep(false);
-        setStep('error');
-        setErrorMsg(responseData.reason || "Não foi possível reconhecer sua biometria facial. Verifique o posicionamento do rosto.");
-        return;
-      }
-
-      // Found candidate employee! Store metadata.
-      setIdentifiedEmployee(responseData.employee);
-      setRecognitionResult({
-        matched: responseData.matched,
-        confidence: responseData.confidence,
-        reason: responseData.reason
-      });
-
-      // 3. Trigger Interactive Anti-Spoofing & Liveness Challenge
-      setStep('liveness');
-      setLivenessProgress(0);
-      setLivenessTask("piscar");
-      
+      await runIdentificationWithPhoto(photoDataUri);
     } catch (err: any) {
       playBeep(false);
-      setErrorMsg(err.message || "Erro de conexão com o banco de dados biométrico.");
+      setErrorMsg(err.message || "Erro no processamento da biometria facial.");
       setStep('error');
     } finally {
       setLoading(false);
@@ -636,17 +736,58 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
                       </div>
                     </>
                   ) : (
-                    <div className="flex flex-col items-center p-6 text-center space-y-4 w-full">
-                      <div className="h-14 w-14 rounded-3xl bg-blue-500/10 border border-blue-500/15 flex items-center justify-center text-blue-400 shadow-inner shrink-0">
-                        <Camera className="h-7 w-7 animate-pulse" />
+                    <div className="flex flex-col items-center p-4 text-center space-y-3.5 w-full">
+                      <div className="h-11 w-11 rounded-2xl bg-amber-500/10 border border-amber-550/20 flex items-center justify-center text-amber-400 shadow-inner shrink-0">
+                        <Camera className="h-5 w-5 animate-pulse" />
                       </div>
-                      <div className="px-3">
-                        <h4 className="text-sm font-bold text-white uppercase tracking-wider">Reconhecimento Facial Ativo</h4>
-                        <p className="text-[11px] text-gray-400 max-w-[210px] leading-relaxed mt-1.5 mx-auto">
-                          Posicione seu rosto em frente à câmera da estação de trabalho. O motor neural de IA identificará seu registro REP-P automaticamente.
+                      <div className="px-2 w-full">
+                        <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Webcam Bloqueada / Indisponível</h4>
+                        <p className="text-[10px] text-gray-400 leading-relaxed max-w-[240px] mt-1 mx-auto">
+                          Devido às restrições de permissão do navegador, a câmera física não pôde ser ativada. Use o simulador oficial abaixo para testar a biometria:
                         </p>
+
+                        <div className="mt-4 w-full">
+                          <label className="block text-[9px] font-mono font-bold text-gray-400 text-left uppercase tracking-wider mb-1.5">
+                            Selecione o Rosto para Apresentar:
+                          </label>
+                          <select
+                            id="select_terminal_simulate_cpf"
+                            value={simulationCpf}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSimulationCpf(val);
+                            }}
+                            className="w-full py-2 px-3 bg-gray-900 border border-gray-800 focus:border-blue-500 transition-all text-xs font-semibold text-gray-200 rounded-xl cursor-pointer"
+                          >
+                            <option value="">-- Apresentar Rosto de... --</option>
+                            {employees
+                              .filter(emp => emp.status === "ativo" && emp.fotoUrl && emp.fotoUrl.startsWith("data:image/") && !emp.fotoUrl.toLowerCase().includes("svg"))
+                              .map(emp => (
+                                <option key={emp.cpf} value={emp.cpf}>
+                                  👤 {emp.nome} ({emp.cargo})
+                                </option>
+                              ))
+                            }
+                          </select>
+                        </div>
                       </div>
-                      <div className="h-1 w-12 bg-blue-500/20 rounded-full"></div>
+
+                      {simulationCpf ? (
+                        <div className="relative mt-2 flex flex-col items-center">
+                          <div className="h-28 w-28 rounded-full overflow-hidden border-2 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse">
+                            <img 
+                              src={employees.find(e => e.cpf === simulationCpf)?.fotoUrl} 
+                              alt="Rosto Apresentado" 
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-900/30 px-2 py-0.5 rounded tracking-widest mt-2 animate-pulse font-bold text-center">
+                            ROSTO PRONTO PARA LEITURA
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="h-1 w-12 bg-amber-500/20 rounded-full mt-2"></div>
+                      )}
                     </div>
                   )}
 
@@ -675,6 +816,8 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
                     Identificar Biometria & Bater Ponto
                   </button>
                 </div>
+
+
               </div>
             )}
 

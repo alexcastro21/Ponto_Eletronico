@@ -96,155 +96,8 @@ function initializeDB() {
     const initialData = {
       companies,
       escalas,
-      employees: [
-        {
-          id: "emp_1",
-          nome: "Carlos Eduardo Silva",
-          cpf: "123.456.789-10",
-          cargo: "Analista de Operações",
-          setor: "Operações",
-          empresaId: "comp_1",
-          escalaId: "esc_1",
-          entrada: "08:00",
-          almocoSaida: "12:00",
-          almocoRetorno: "13:00",
-          saida: "17:00",
-          fotoUrl: defaultAvatars[0],
-          status: "ativo",
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: "emp_2",
-          nome: "Mariana Santos Oliveira",
-          cpf: "234.567.890-11",
-          cargo: "Gerente de Recursos Humanos",
-          setor: "Recursos Humanos",
-          empresaId: "comp_1",
-          escalaId: "esc_2",
-          entrada: "09:00",
-          almocoSaida: "13:00",
-          almocoRetorno: "14:00",
-          saida: "18:00",
-          fotoUrl: defaultAvatars[1],
-          status: "ativo",
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: "emp_3",
-          nome: "Felipe Rodrigues Costa",
-          cpf: "345.678.901-12",
-          cargo: "Engenheiro de Software",
-          setor: "Tecnologia",
-          empresaId: "comp_1",
-          escalaId: "esc_1",
-          entrada: "08:00",
-          almocoSaida: "12:00",
-          almocoRetorno: "13:00",
-          saida: "17:00",
-          fotoUrl: defaultAvatars[2],
-          status: "ativo",
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: "emp_4",
-          nome: "Beatriz Sousa Fernandes",
-          cpf: "456.789.012-13",
-          cargo: "Coordenadora Financeira",
-          setor: "Financeiro",
-          empresaId: "comp_2",
-          escalaId: "esc_1",
-          entrada: "08:30",
-          almocoSaida: "12:30",
-          almocoRetorno: "13:30",
-          saida: "17:30",
-          fotoUrl: defaultAvatars[3],
-          status: "ativo",
-          createdAt: new Date().toISOString()
-        }
-      ],
-      logs: [
-        // Logs with secure digital signature / Hash calculated simulating REP-P Portaria 671
-        {
-          id: "log_1",
-          cpf: "123.456.789-10",
-          nome: "Carlos Eduardo Silva",
-          data: yesterday,
-          hora: "07:58:12",
-          tipo: "entrada",
-          status: "no_prazo",
-          fotoUrl: defaultAvatars[0],
-          confidence: 0.98,
-          matched: true,
-          empresaId: "comp_1",
-          ip: "192.168.1.100",
-          liveness: "Aprovado (Detector de Sorriso/Piscada)",
-          hash: "a4f89d38c29188e99493bef290230cd32f89f078b61c28c8de1c801bc20a3bc7"
-        },
-        {
-          id: "log_2",
-          cpf: "123.456.789-10",
-          nome: "Carlos Eduardo Silva",
-          data: yesterday,
-          hora: "12:02:45",
-          tipo: "almoco_saida",
-          status: "no_prazo",
-          fotoUrl: defaultAvatars[0],
-          confidence: 0.96,
-          matched: true,
-          empresaId: "comp_1",
-          ip: "192.168.1.100",
-          liveness: "Aprovado (Detector de Sorriso/Piscada)",
-          hash: "8f7e2d96c342b10aeef983d092d63abf201083ef281cdaef201fcbb903efab81"
-        },
-        {
-          id: "log_3",
-          cpf: "123.456.789-10",
-          nome: "Carlos Eduardo Silva",
-          data: yesterday,
-          hora: "13:01:05",
-          tipo: "almoco_retorno",
-          status: "no_prazo",
-          fotoUrl: defaultAvatars[0],
-          confidence: 0.97,
-          matched: true,
-          empresaId: "comp_1",
-          ip: "192.168.1.100",
-          liveness: "Aprovado (Detector de Sorriso/Piscada)",
-          hash: "c2e56cfde381bf09cdecffcdaee8fca1029ea78f89bcfa9a28cdaecb457bf039"
-        },
-        {
-          id: "log_4",
-          cpf: "123.456.789-10",
-          nome: "Carlos Eduardo Silva",
-          data: yesterday,
-          hora: "17:00:15",
-          tipo: "saida_final",
-          status: "no_prazo",
-          fotoUrl: defaultAvatars[0],
-          confidence: 0.99,
-          matched: true,
-          empresaId: "comp_1",
-          ip: "192.168.1.100",
-          liveness: "Aprovado (Detector de Sorriso/Piscada)",
-          hash: "28fc4a2d98ceba8c78fa3e01bc28decca789fbec9bcffae9e28dcafbc903828c"
-        },
-        {
-          id: "log_5",
-          cpf: "234.567.890-11",
-          nome: "Mariana Santos Oliveira",
-          data: yesterday,
-          hora: "09:15:34",
-          tipo: "entrada",
-          status: "atrasado",
-          fotoUrl: defaultAvatars[1],
-          confidence: 0.95,
-          matched: true,
-          empresaId: "comp_1",
-          ip: "192.168.1.101",
-          liveness: "Aprovado (Detector de Sorriso/Piscada)",
-          hash: "b0ce398fe289ccdcbadff3efacbdf09e208cbfacdeea1289cfba201bc89cfda2"
-        }
-      ],
+      employees: [],
+      logs: [],
       config: {
         toleranciaMinutos: 10,
         empresaNome: "Empresa Tecnologia S.A.",
@@ -252,19 +105,7 @@ function initializeDB() {
         sheetsId: "1-v78fJdfH8dfv_Sdfp90DJKfdm_f8Sdf",
         sheetsEnabled: false
       },
-      ajustes: [
-        {
-          id: "rq_1",
-          cpf: "456.789.012-13",
-          nome: "Beatriz Sousa Fernandes",
-          data: yesterday,
-          horaNova: "08:35",
-          tipo: "entrada",
-          justificativa: "Falta de energia pontual no condomínio empresarial atrasou entrada nos elevadores.",
-          status: "pendente",
-          dataSolicitacao: new Date().toISOString()
-        }
-      ],
+      ajustes: [],
       systemLogs: [
         {
           id: "sys_1",
@@ -493,7 +334,7 @@ app.post("/api/ponto/check-cpf", (req, res) => {
 
 // 1-to-Many Advanced Smart Facial Identification
 app.post("/api/ponto/identify-face", async (req, res) => {
-  const { capturedFrame, simulatedCpf, clientMatchedCpf } = req.body;
+  const { capturedFrame, clientMatchedCpf } = req.body;
 
   if (!capturedFrame) {
     return res.status(400).json({ error: "Foto capturada da webcam é obrigatória para identificação." });
@@ -504,28 +345,6 @@ app.post("/api/ponto/identify-face", async (req, res) => {
 
   if (activeEmployees.length === 0) {
     return res.status(404).json({ error: "Nenhum funcionário ativo cadastrado no SmartPoint." });
-  }
-
-  // Helper inside identify-face: if simulatedCpf is explicitly provided (as sandboxed fallback)
-  if (simulatedCpf) {
-    const employee = activeEmployees.find((e: any) => e.cpf === simulatedCpf);
-    if (employee) {
-      return res.json({
-        matched: true,
-        confidence: 0.98,
-        employee: {
-          id: employee.id,
-          nome: employee.nome,
-          cpf: employee.cpf,
-          cargo: employee.cargo,
-          setor: employee.setor,
-          fotoUrl: employee.fotoUrl,
-          empresaId: employee.empresaId,
-          escalaId: employee.escalaId
-        },
-        reason: "[Simulação Sandbox] Identificação biométrica efetuada com sucesso para fins de teste."
-      });
-    }
   }
 
   // Filter candidates who have uploaded a real custom profile picture (not the default vector templates)
@@ -549,54 +368,58 @@ app.post("/api/ponto/identify-face", async (req, res) => {
       const capturedMime = getMimeType(capturedFrame);
       const capturedB64 = extractBase64(capturedFrame);
 
-      // Build multimodal array with captured frame and up to 8 candidate reference files
-      const contentsParts: any[] = [
-        {
-          inlineData: {
-            mimeType: capturedMime,
-            data: capturedB64
-          }
+      // Build multimodal array with captured frame and reference candidate photos
+      const contentsParts: any[] = [];
+
+      // Pair description labels with specific images to prevent indexing mistakes in the neural model
+      contentsParts.push({ text: "IMAGEM DA WEBCAM CAPTURADA (RELÓGIO DE PONTO EM TEMPO REAL a ser identificada):\n" });
+      contentsParts.push({
+        inlineData: {
+          mimeType: capturedMime,
+          data: capturedB64
         }
-      ];
+      });
 
-      // Add each reference image
+      contentsParts.push({ text: "\nFOTOS DE REFERÊNCIA BIOMÉTRICA DOS FUNCIONÁRIOS CADASTRADOS:\n" });
+
       const maxCandidates = Math.min(candidatesWithPhotos.length, 8);
-      let promptText = `A primeira imagem fornecida é uma captura em tempo real tirada na webcam de um relógio de ponto eletrônico.
-As imagens a seguir representam as fotos de cadastro biométrico oficial dos funcionários ativos da empresa.
-Sua missão é atuar como um Scanner Biométrico 1-para-Muitos em conformidade com a legislação brasileira de controle de ponto (REP-P).
-Compare as características fisionômicas do rosto na imagem da webcam com as imagens de cadastro abaixo.
-Anote que o colaborador pode ter mudado o corte de cabelo, ter barbeado, estar com iluminação diferente ou usar óculos. Seja tolerante mas preciso.
-
-Lista de Candidatos por Ordem de Envio:\n`;
-
       for (let i = 0; i < maxCandidates; i++) {
         const candidate = candidatesWithPhotos[i];
         const mime = getMimeType(candidate.fotoUrl);
         const b64 = extractBase64(candidate.fotoUrl);
+
+        contentsParts.push({
+          text: `\nFOTO BIOMÉTRICA DO CANDIDATO ${i + 1} (Nome: ${candidate.nome}, CPF: ${candidate.cpf}, Cargo: ${candidate.cargo}):\n`
+        });
         contentsParts.push({
           inlineData: {
             mimeType: mime,
             data: b64
           }
         });
-        promptText += `Foto ${i + 2}: Nome: ${candidate.nome}, CPF: ${candidate.cpf}, Cargo: ${candidate.cargo}\n`;
       }
 
-      promptText += `\nQual destes candidatos corresponde ao rosto capturado na webcam? Se nenhum bater com segurança (> 70% de similaridade), responda matched: false.
-Responda APENAS com um formato estrito de objeto JSON (sem tags markdown de código):
+      const promptText = `\nCom base nas fotos fornecidas, sua missão é atuar como um Scanner Biométrico 1-para-Muitos em conformidade com a portaria REP-P.
+Compare as características fisionômicas do rosto na 'IMAGEM DA WEBCAM CAPTURADA' com cada um dos Candidatos mostrados abaixo na seção 'FOTOS DE REFERÊNCIA BIOMÉTRICA DOS FUNCIONÁRIOS CADASTRADOS'.
+Lembre-se de que a iluminação, óculos, expressão ou corte de cabelo podem variar levemente. Identifique o candidato correto se houver uma correspondência forte e inequívoca (com mais de 70% de certeza).
+
+Caso consiga identificar o funcionário correto, responda 'matched: true' e informe o 'nome' e o 'cpf' exatos fornecidos na descrição dele.
+Caso o rosto na imagem da webcam NÃO corresponda a nenhum dos funcionários cadastrados apresentados, defina 'matched: false'.
+
+Responda APENAS com um formato estrito de objeto JSON (sem tags markdown de código e sem texto adicional):
 {
   "matched": boolean,
-  "cpf": "CPF correspondente ou string vazia",
-  "nome": "Nome correspondente ou string vazia",
+  "cpf": "CPF correspondente ou string vazia se matched for false",
+  "nome": "Nome correspondente ou string vazia se matched for false",
   "confidence": number (entre 0.0 e 1.0),
-  "reason": "Explicação curta em português justificando por que esta pessoa foi identificada (ou por que nenhuma bateu)"
+  "reason": "Explicação curta em português justificando os fatores faciais identificados"
 }`;
 
       contentsParts.push({ text: promptText });
 
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
-        contents: contentsParts,
+        contents: { parts: contentsParts },
         config: {
           responseMimeType: "application/json"
         }
@@ -724,16 +547,18 @@ app.post("/api/ponto/validate-face", async (req, res) => {
 
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
-        contents: [
-          { inlineData: { mimeType: originalMime, data: originalB64 } },
-          { inlineData: { mimeType: capturedMime, data: capturedB64 } },
-          {
-            text: `A primeira imagem é a foto facial de cadastro de um funcionário chamado ${employee.nome}. A segunda imagem é uma captura em tempo real na webcam.
-            Determine se correspondem à mesma pessoa.
-            Responda em JSON:
-            {"matched": boolean, "confidence": number, "reason": "Frase em português"}`
-          }
-        ],
+        contents: {
+          parts: [
+            { inlineData: { mimeType: originalMime, data: originalB64 } },
+            { inlineData: { mimeType: capturedMime, data: capturedB64 } },
+            {
+              text: `A primeira imagem é a foto facial de cadastro de um funcionário chamado ${employee.nome}. A segunda imagem é uma captura em tempo real na webcam.
+              Determine se correspondem à mesma pessoa.
+              Responda em JSON:
+              {"matched": boolean, "confidence": number, "reason": "Frase em português"}`
+            }
+          ]
+        },
         config: { responseMimeType: "application/json" }
       });
 
