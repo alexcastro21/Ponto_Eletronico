@@ -5,6 +5,7 @@ import {
   Database, AlertCircle, CheckCircle, ShieldAlert, BadgeInfo, Camera, AlertTriangle
 } from "lucide-react";
 import { Employee, TimeLog, AjusteRequest, SystemLog, SystemConfig, TimeLogType, Company, Scale } from "../types";
+import { googleSignIn, getAccessToken, logoutGoogle } from "../lib/googleAuth";
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -62,8 +63,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     empresaNome: "Empresa Tecnologia S.A.",
     timezone: "America/Sao_Paulo",
     sheetsId: "",
-    sheetsEnabled: false
+    sheetsEnabled: false,
+    driveFolderId: "1a32kWrX_CBfhRvaDyburITrPWV2_WB5A",
+    driveEnabled: true
   });
+
+  // Google OAuth States
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleUserEmail, setGoogleUserEmail] = useState<string | null>(null);
+  const [verifyingGoogle, setVerifyingGoogle] = useState(false);
 
   // Loading States
   const [loading, setLoading] = useState(true);
@@ -211,6 +219,66 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   // Feedback notification overlays
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
+  const checkGoogleStatus = async () => {
+    try {
+      const res = await fetch("/api/google/status");
+      const data = await res.json();
+      if (data.connected) {
+        setGoogleConnected(true);
+        setGoogleUserEmail(data.email);
+      } else {
+        setGoogleConnected(false);
+        setGoogleUserEmail(null);
+      }
+    } catch (err) {
+      console.error("Erro verificando status do Google:", err);
+    }
+  };
+
+  const onConnectGoogle = async () => {
+    setVerifyingGoogle(true);
+    try {
+      const loginResult = await googleSignIn();
+      if (!loginResult) {
+        showToast("Conexão cancelada pelo usuário.", "info");
+        return;
+      }
+      
+      const res = await fetch("/api/google/save-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: loginResult.accessToken })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setGoogleConnected(true);
+        setGoogleUserEmail(data.email);
+        showToast(`Google integrado com sucesso: ${data.email}`, "success");
+        setDbUpdateTrigger(prev => prev + 1);
+      } else {
+        showToast("Erro ao validar credenciais Google no servidor.", "error");
+      }
+    } catch (err: any) {
+      showToast(`Erro na integração com Google: ${err.message || err}`, "error");
+    } finally {
+      setVerifyingGoogle(false);
+    }
+  };
+
+  const onDisconnectGoogle = async () => {
+    setVerifyingGoogle(true);
+    try {
+      await logoutGoogle();
+      setGoogleConnected(false);
+      setGoogleUserEmail(null);
+      showToast("Conta Google desconectada vitoriosamente.", "success");
+    } catch (err) {
+      showToast("Erro ao desconectar do Google.", "error");
+    } finally {
+      setVerifyingGoogle(false);
+    }
+  };
+
   // Fetch full data
   const fetchData = async () => {
     setLoading(true);
@@ -224,6 +292,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       setSystemLogs(db.systemLogs);
       setCompanies(db.companies || []);
       setEscalas(db.escalas || []);
+      await checkGoogleStatus();
     } catch (err) {
       showToast("Não foi possível sincronizar informações do servidor de ponto.", "error");
     } finally {
@@ -244,13 +313,21 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const handleSheetsSync = async () => {
     setSyncingSheets(true);
     try {
-      const response = await fetch("/api/sheets/sync", { method: "POST" });
+      const token = await getAccessToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["x-google-token"] = token;
+      }
+      const response = await fetch("/api/sheets/sync", { 
+        method: "POST",
+        headers
+      });
       const data = await response.json();
       if (data.success) {
         showToast(data.message, "success");
         setDbUpdateTrigger(prev => prev + 1);
       } else {
-        showToast(data.message, "info");
+        showToast(data.message, "error");
       }
     } catch {
       showToast("Erro na comunicação com a API de sincronização.", "error");
@@ -338,9 +415,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         fotoUrl: rawPhotoUpload || empForm.fotoUrl
       };
 
+      const token = await getAccessToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["x-google-token"] = token;
+      }
+
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload)
       });
 
@@ -1264,42 +1347,157 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
                 </div>
 
-                <div className="border-t border-gray-850/60 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-sm font-bold text-white">Integração com Planilhas Google Sheets</h3>
-                      <p className="text-[11px] text-gray-400">Habilite gravação automática em tempo real nas abas 'Funcionários' e 'Registros' utilizando a API do GSheets.</p>
+                <div className="border-t border-gray-850/60 pt-6 space-y-6">
+                  {/* Google OAuth Account State Connection */}
+                  <div className="bg-gray-950/20 border border-gray-850 p-5 rounded-xl space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 bg-[#4285F4]/10 rounded-lg flex items-center justify-center text-[#4285F4]">
+                        <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22-.19-.63z"/>
+                          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">Integração de Conta Google</h4>
+                        <p className="text-[11px] text-gray-400">Vincule seu Google Drive e Sheets para salvar dados de marcações de ponto e fotos biométricas.</p>
+                      </div>
                     </div>
-                    
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        checked={config.sheetsEnabled}
-                        onChange={(e) => setConfig(p => ({ ...p, sheetsEnabled: e.target.checked }))}
-                        className="sr-only peer" 
-                      />
-                      <div className="w-11 h-6 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-650 peer-checked:bg-emerald-500 peer-checked:after:bg-white"></div>
-                    </label>
+
+                    {googleConnected ? (
+                      <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
+                          <div className="text-left">
+                            <p className="text-xs font-semibold text-white">Google Integrado com Sucesso</p>
+                            <p className="text-[10px] text-emerald-400 font-mono font-medium">{googleUserEmail}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={verifyingGoogle}
+                          onClick={onDisconnectGoogle}
+                          className="bg-gray-850 hover:bg-red-900/40 hover:text-red-300 text-gray-300 text-[10px] sm:text-xs font-medium py-1.5 px-3 rounded-lg transition-all cursor-pointer whitespace-nowrap"
+                        >
+                          Desconectar Conta
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="bg-amber-500/5 border border-amber-500/10 p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+                          <div className="text-left">
+                            <p className="text-xs font-semibold text-white">Integração Google Desconectada</p>
+                            <p className="text-[10px] text-gray-400">A sincronização do Sheets e uploads automáticos de fotos ao Drive dependem de login.</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={verifyingGoogle}
+                          onClick={onConnectGoogle}
+                          className="bg-[#4285F4] hover:bg-[#357ae8] text-white text-[10px] sm:text-xs font-semibold py-1.5 px-3 rounded-lg transition-all flex items-center gap-2 shadow-md shadow-[#4285F4]/10 cursor-pointer whitespace-nowrap"
+                        >
+                          {verifyingGoogle ? "Aguardando popup..." : "Conectar com Google"}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {config.sheetsEnabled && (
-                    <div className="bg-gray-950/40 border border-gray-850 p-4 rounded-lg space-y-4">
-                      <div>
-                        <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">ID da Planilha (Spreadsheet ID)</label>
-                        <input
-                          type="text"
-                          value={config.sheetsId}
-                          onChange={(e) => setConfig(p => ({ ...p, sheetsId: e.target.value }))}
-                          placeholder="Ex: 1tV79S_Kdf93bDfJ8fdsl80sdjkF_dfS9..."
-                          className="w-full bg-[#111726] border border-gray-800 focus:border-emerald-500 text-xs text-white rounded-lg py-2.5 px-3 outline-none font-mono"
-                        />
+                  {/* Google Sheets Card Config */}
+                  <div className="bg-gray-950/20 border border-gray-850 p-5 rounded-xl space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-base font-semibold text-white">Google Sheets (Planilhas)</h4>
+                          <p className="text-[11px] text-gray-400">Sincronize tabelas completas de pontuação de forma remota.</p>
+                        </div>
                       </div>
                       
-                      <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg text-emerald-400 text-[10px] leading-relaxed">
-                        <b>Como funciona a integração:</b> O SmartPoint utiliza as credenciais seguras do backend para replicar todas as movimentações. Garanta que o e-mail do Service Account tenha permissão de <b>Editor</b> na sua Planilha Google.
-                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <input 
+                          type="checkbox" 
+                          checked={config.sheetsEnabled}
+                          onChange={(e) => setConfig(p => ({ ...p, sheetsEnabled: e.target.checked }))}
+                          className="sr-only peer" 
+                        />
+                        <div className="w-11 h-6 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-650 peer-checked:bg-emerald-500 peer-checked:after:bg-white"></div>
+                      </label>
                     </div>
-                  )}
+
+                    {config.sheetsEnabled && (
+                      <div className="bg-gray-950/40 border border-gray-850 p-4 rounded-lg space-y-4 animate-fadeIn">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">ID ou URL da Planilha (Spreadsheet ID)</label>
+                          <input
+                            type="text"
+                            value={config.sheetsId}
+                            onChange={(e) => setConfig(p => ({ ...p, sheetsId: e.target.value }))}
+                            placeholder="Ex: https://docs.google.com/spreadsheets/d/1VC1wLpL6h..."
+                            className="w-full bg-[#111726] border border-gray-800 focus:border-emerald-500 text-xs text-white rounded-lg py-2.5 px-3 outline-none font-mono"
+                          />
+                        </div>
+                        
+                        <div className="p-3.5 bg-emerald-500/5 border border-emerald-500/10 rounded-lg text-emerald-300 text-[10.5px] leading-relaxed space-y-1">
+                          <p><b>✨ Geração Inteligente de Abas:</b> O SmartPoint estruturará as seguintes abas automaticamente em sua planilha:</p>
+                          <ul className="list-disc leading-loose pl-4 font-mono text-[9.5px] text-gray-300 mt-1">
+                            <li><b className="text-white">Funcionarios</b>: Lista cadastrada de colaboradores do MTE</li>
+                            <li><b className="text-white">Registros</b>: Marcações de entrada, almoço e saída validadas em tempo real</li>
+                            <li><b className="text-white font-semibold">Empresas</b>: Entidades e CNPJs associados</li>
+                            <li><b className="text-white font-semibold">Escalas</b>: Configuração de carga horária e de tolerâncias</li>
+                            <li><b className="text-white font-semibold">Ajustes</b>: Retificações homologadas legalmente</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Google Drive Card Config */}
+                  <div className="bg-gray-950/20 border border-gray-850 p-5 rounded-xl space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-400">
+                          <Database className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-base font-semibold text-white">Google Drive (Pasta de Fotos)</h4>
+                          <p className="text-[11px] text-gray-400">Salve as capturas de marcação de ponto e biometrias na nuvem.</p>
+                        </div>
+                      </div>
+                      
+                      <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <input 
+                          type="checkbox" 
+                          checked={config.driveEnabled}
+                          onChange={(e) => setConfig(p => ({ ...p, driveEnabled: e.target.checked }))}
+                          className="sr-only peer" 
+                        />
+                        <div className="w-11 h-6 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-650 peer-checked:bg-blue-500 peer-checked:after:bg-white"></div>
+                      </label>
+                    </div>
+
+                    {config.driveEnabled && (
+                      <div className="bg-gray-950/40 border border-gray-850 p-4 rounded-lg space-y-4 animate-fadeIn">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">ID da Pasta do Google Drive (Foto Folder ID)</label>
+                          <input
+                            type="text"
+                            value={config.driveFolderId}
+                            onChange={(e) => setConfig(p => ({ ...p, driveFolderId: e.target.value }))}
+                            placeholder="Ex: 1a32kWrX_CBfhRvaDyburITrPWV2_WB5A"
+                            className="w-full bg-[#111726] border border-gray-800 focus:border-blue-500 text-xs text-white rounded-lg py-2.5 px-3 outline-none font-mono"
+                          />
+                        </div>
+                        
+                        <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg text-blue-300 text-[10.5px] leading-relaxed">
+                          <b>🗄️ Otimização Automática do Banco:</b> O SmartPoint enviará as fotografias em tempo real para a pasta configurada do Drive, convertendo os dados cadastrais em links permanentes (protegendo a capacidade da memória local).
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex justify-end pt-2">

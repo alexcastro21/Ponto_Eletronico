@@ -65,6 +65,8 @@ export interface SystemConfig {
   timezone: string;
   sheetsId: string;
   sheetsEnabled: boolean;
+  driveFolderId?: string;
+  driveEnabled?: boolean;
 }
 
 export interface AjusteRequest {

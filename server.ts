@@ -128,7 +128,16 @@ initializeDB();
 function readDB() {
   try {
     const data = fs.readFileSync(DB_FILE, "utf8");
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    if (parsed.config) {
+      if (parsed.config.driveEnabled === undefined) {
+        parsed.config.driveEnabled = true;
+      }
+      if (!parsed.config.driveFolderId) {
+        parsed.config.driveFolderId = "1a32kWrX_CBfhRvaDyburITrPWV2_WB5A";
+      }
+    }
+    return parsed;
   } catch (error) {
     console.error("Erro ao ler banco de dados local:", error);
     return { employees: [], logs: [], config: {}, ajustes: [], systemLogs: [] };
@@ -143,6 +152,121 @@ function writeDB(data: any) {
   } catch (error) {
     console.error("Erro ao escrever no banco de dados local:", error);
     return false;
+  }
+}
+
+// Google Access Token stored in-memory
+let googleAccessToken: string | null = null;
+let googleConnectedUserEmail: string | null = null;
+
+// Helper to convert base64 or URL to base64
+async function getBase64FromUrlOrDataUri(urlOrDataUri: string): Promise<{ mime: string; data: string }> {
+  if (!urlOrDataUri) {
+    return { mime: "image/jpeg", data: "" };
+  }
+  if (urlOrDataUri.startsWith("data:")) {
+    const parts = urlOrDataUri.split(",");
+    const data = parts.length > 1 ? parts[1] : urlOrDataUri;
+    const match = urlOrDataUri.match(/data:(.*?);/);
+    const mime = match ? match[1] : "image/jpeg";
+    return { mime, data };
+  } else {
+    try {
+      const res = await fetch(urlOrDataUri);
+      if (res.ok) {
+        const buffer = await res.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString("base64");
+        const contentType = res.headers.get("content-type") || "image/jpeg";
+        return { mime: contentType, data: base64 };
+      }
+    } catch (err) {
+      console.error("Erro ao converter URL de foto para base64:", err);
+    }
+    return { mime: "image/jpeg", data: "" };
+  }
+}
+
+// Google verify token
+async function verifyGoogleToken(token: string): Promise<string | null> {
+  try {
+    const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data: any = await res.json();
+      return data.email || "Conectado";
+    }
+  } catch (err) {
+    console.error("Erro ao verificar token do Google:", err);
+  }
+  return null;
+}
+
+// Google upload helper
+async function uploadToGoogleDrive(base64Data: string, filename: string, folderId: string, token: string): Promise<string | null> {
+  try {
+    if (!base64Data || !base64Data.startsWith("data:image/")) {
+      return null;
+    }
+    const mimeMatch = base64Data.match(/^data:([^;]+);base64,/);
+    if (!mimeMatch) return null;
+    const mimeType = mimeMatch[1];
+    const base64Content = base64Data.replace(/^data:[^;]+;base64,/, "");
+
+    const boundary = "-------314159265358979323846";
+    const delimiter = `\r\n--${boundary}\r\n`;
+    const closeDelimiter = `\r\n--${boundary}--`;
+
+    const metadata = {
+      name: filename,
+      mimeType: mimeType,
+      parents: [folderId]
+    };
+
+    const multipartRequestBody = Buffer.concat([
+      Buffer.from(delimiter + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(metadata) + delimiter),
+      Buffer.from(`Content-Type: ${mimeType}\r\nContent-Transfer-Encoding: base64\r\n\r\n`),
+      Buffer.from(base64Content),
+      Buffer.from(closeDelimiter)
+    ]);
+
+    const uploadRes = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+        "Content-Length": String(multipartRequestBody.length)
+      },
+      body: multipartRequestBody
+    });
+
+    if (!uploadRes.ok) {
+      const errMsg = await uploadRes.text();
+      console.error("Erro no upload do Google Drive:", errMsg);
+      return null;
+    }
+
+    const fileData: any = await uploadRes.json();
+    const fileId = fileData.id;
+    if (!fileId) return null;
+
+    // Set permission to anyone reader
+    await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        role: "reader",
+        type: "anyone"
+      })
+    });
+
+    return `https://docs.google.com/uc?export=view&id=${fileId}`;
+  } catch (error) {
+    console.error("Erro ao subir imagem no Google Drive:", error);
+    return null;
   }
 }
 
@@ -216,7 +340,7 @@ app.get("/api/employees", (req, res) => {
 });
 
 // Register new Employee (CRUD - Create)
-app.post("/api/employees", (req, res) => {
+app.post("/api/employees", async (req, res) => {
   const db = readDB();
   const { nome, cpf, cargo, setor, entrada, almocoSaida, almocoRetorno, saida, fotoUrl, empresaId, escalaId, assinaturaDigital } = req.body;
 
@@ -230,6 +354,16 @@ app.post("/api/employees", (req, res) => {
     return res.status(400).json({ error: "Funcionário com este CPF já está cadastrado e ativo." });
   }
 
+  let finalFotoUrl = fotoUrl || defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
+  const tokenToUse = req.headers["x-google-token"] || googleAccessToken;
+  if (db.config.driveEnabled && db.config.driveFolderId && tokenToUse && finalFotoUrl.startsWith("data:image/")) {
+    const driveUrl = await uploadToGoogleDrive(finalFotoUrl, `FotoPerfil_${cpf}_${Date.now()}.jpg`, db.config.driveFolderId, String(tokenToUse));
+    if (driveUrl) {
+      finalFotoUrl = driveUrl;
+      addSystemLog("Google Drive Agent", "Upload de Imagem", `Foto de perfil do colaborador ${nome} (CPF ${cpf}) salva no Google Drive com sucesso.`, "success");
+    }
+  }
+
   const newEmp = {
     id: "emp_" + Math.random().toString(36).substr(2, 9),
     nome,
@@ -240,7 +374,7 @@ app.post("/api/employees", (req, res) => {
     almocoSaida: almocoSaida || "12:00",
     almocoRetorno: almocoRetorno || "13:00",
     saida: saida || "17:00",
-    fotoUrl: fotoUrl || defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)],
+    fotoUrl: finalFotoUrl,
     empresaId: empresaId || "",
     escalaId: escalaId || "",
     assinaturaDigital: assinaturaDigital || "",
@@ -255,7 +389,7 @@ app.post("/api/employees", (req, res) => {
 });
 
 // Update Employee (CRUD - Update)
-app.put("/api/employees/:id", (req, res) => {
+app.put("/api/employees/:id", async (req, res) => {
   const db = readDB();
   const { id } = req.params;
   const index = db.employees.findIndex((e: any) => e.id === id);
@@ -264,7 +398,19 @@ app.put("/api/employees/:id", (req, res) => {
     return res.status(404).json({ error: "Funcionário não encontrado." });
   }
 
-  db.employees[index] = { ...db.employees[index], ...req.body };
+  let updatedFields = { ...req.body };
+  const tokenToUse = req.headers["x-google-token"] || googleAccessToken;
+  if (db.config.driveEnabled && db.config.driveFolderId && tokenToUse && updatedFields.fotoUrl && updatedFields.fotoUrl.startsWith("data:image/")) {
+    const cpfForName = updatedFields.cpf || db.employees[index].cpf;
+    const empName = updatedFields.nome || db.employees[index].nome;
+    const driveUrl = await uploadToGoogleDrive(updatedFields.fotoUrl, `FotoPerfil_${cpfForName}_${Date.now()}.jpg`, db.config.driveFolderId, String(tokenToUse));
+    if (driveUrl) {
+      updatedFields.fotoUrl = driveUrl;
+      addSystemLog("Google Drive Agent", "Upload de Imagem", `Nova foto de perfil de ${empName} salva no Google Drive com sucesso.`, "success");
+    }
+  }
+
+  db.employees[index] = { ...db.employees[index], ...updatedFields };
   writeDB(db);
   addSystemLog("Administrador", "Edição de Funcionário", `Dados de ${db.employees[index].nome} atualizados.`, "info");
   res.json(db.employees[index]);
@@ -349,24 +495,20 @@ app.post("/api/ponto/identify-face", async (req, res) => {
 
   // Filter candidates who have uploaded a real custom profile picture (not the default vector templates)
   const candidatesWithPhotos = activeEmployees.filter((e: any) => 
-    e.fotoUrl && e.fotoUrl.startsWith("data:image/") && !e.fotoUrl.startsWith("data:image/svg")
+    e.fotoUrl && (e.fotoUrl.startsWith("data:image/") || e.fotoUrl.startsWith("http")) && !e.fotoUrl.startsWith("data:image/svg")
   );
 
   // If Gemini client IS available AND we have custom human facial references:
   if (ai && candidatesWithPhotos.length > 0) {
     try {
-      const extractBase64 = (dataUri: string) => {
-        const parts = dataUri.split(",");
-        return parts.length > 1 ? parts[1] : dataUri;
-      };
-
       const getMimeType = (dataUri: string) => {
         const match = dataUri.match(/data:(.*?);/);
         return match ? match[1] : "image/jpeg";
       };
 
       const capturedMime = getMimeType(capturedFrame);
-      const capturedB64 = extractBase64(capturedFrame);
+      const capturedParts = capturedFrame.split(",");
+      const capturedB64 = capturedParts.length > 1 ? capturedParts[1] : capturedFrame;
 
       // Build multimodal array with captured frame and reference candidate photos
       const contentsParts: any[] = [];
@@ -385,16 +527,15 @@ app.post("/api/ponto/identify-face", async (req, res) => {
       const maxCandidates = Math.min(candidatesWithPhotos.length, 8);
       for (let i = 0; i < maxCandidates; i++) {
         const candidate = candidatesWithPhotos[i];
-        const mime = getMimeType(candidate.fotoUrl);
-        const b64 = extractBase64(candidate.fotoUrl);
+        const photoObj = await getBase64FromUrlOrDataUri(candidate.fotoUrl);
 
         contentsParts.push({
           text: `\nFOTO BIOMÉTRICA DO CANDIDATO ${i + 1} (Nome: ${candidate.nome}, CPF: ${candidate.cpf}, Cargo: ${candidate.cargo}):\n`
         });
         contentsParts.push({
           inlineData: {
-            mimeType: mime,
-            data: b64
+            mimeType: photoObj.mime,
+            data: photoObj.data
           }
         });
       }
@@ -527,23 +668,20 @@ app.post("/api/ponto/validate-face", async (req, res) => {
     });
   }
 
-  if (ai && employee.fotoUrl && employee.fotoUrl.startsWith("data:image/")) {
+  if (ai && employee.fotoUrl && (employee.fotoUrl.startsWith("data:image/") || employee.fotoUrl.startsWith("http"))) {
     try {
-      const extractBase64 = (dataUri: string) => {
-        const parts = dataUri.split(",");
-        return parts.length > 1 ? parts[1] : dataUri;
-      };
-
       const getMimeType = (dataUri: string) => {
         const match = dataUri.match(/data:(.*?);/);
         return match ? match[1] : "image/jpeg";
       };
 
-      const originalMime = getMimeType(employee.fotoUrl);
-      const originalB64 = extractBase64(employee.fotoUrl);
+      const originalPhotoObj = await getBase64FromUrlOrDataUri(employee.fotoUrl);
+      const originalMime = originalPhotoObj.mime;
+      const originalB64 = originalPhotoObj.data;
 
       const capturedMime = getMimeType(capturedFrame);
-      const capturedB64 = extractBase64(capturedFrame);
+      const capturedParts = capturedFrame.split(",");
+      const capturedB64 = capturedParts.length > 1 ? capturedParts[1] : capturedFrame;
 
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
@@ -582,7 +720,7 @@ app.post("/api/ponto/validate-face", async (req, res) => {
 });
 
 // Perform Ponto Registration (With cryptographically secure SHA-256 digital signature + IP tracking)
-app.post("/api/ponto/register", (req, res) => {
+app.post("/api/ponto/register", async (req, res) => {
   const db = readDB();
   const { cpf, tipo, capturedFrame, confidence, matched, gpsCoordinates } = req.body;
 
@@ -658,6 +796,16 @@ app.post("/api/ponto/register", (req, res) => {
     .update(signaturePayload)
     .digest("hex");
 
+  let finalFotoUrl = capturedFrame || employee.fotoUrl;
+  const tokenToUse = req.headers["x-google-token"] || googleAccessToken;
+  if (db.config.driveEnabled && db.config.driveFolderId && tokenToUse && finalFotoUrl && finalFotoUrl.startsWith("data:image/")) {
+    const driveUrl = await uploadToGoogleDrive(finalFotoUrl, `Ponto_${cpf}_${dataAtual}_${horaAtual.replace(/:/g, "-")}.jpg`, db.config.driveFolderId, String(tokenToUse));
+    if (driveUrl) {
+      finalFotoUrl = driveUrl;
+      addSystemLog("Google Drive Agent", "Upload de Imagem", `Foto do registro de ponto (${tipo}) de ${employee.nome} salva no Google Drive com sucesso.`, "success");
+    }
+  }
+
   const newLog = {
     id: "log_" + crypto.randomBytes(4).toString("hex"),
     cpf,
@@ -666,7 +814,7 @@ app.post("/api/ponto/register", (req, res) => {
     hora: horaAtual,
     tipo,
     status,
-    fotoUrl: capturedFrame || employee.fotoUrl,
+    fotoUrl: finalFotoUrl,
     confidence: confidence || 1.0,
     matched: matched !== undefined ? matched : true,
     empresaId: employee.empresaId || "comp_1",
@@ -999,8 +1147,41 @@ app.post("/api/ponto/manual", (req, res) => {
   res.status(201).json(newLog);
 });
 
+// Save Google Account Access Token in memory
+app.post("/api/google/save-token", async (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ error: "Token do Google é obrigatório." });
+  }
+
+  const email = await verifyGoogleToken(token);
+  if (email) {
+    googleAccessToken = token;
+    googleConnectedUserEmail = email;
+    addSystemLog("Google OAuth Agent", "Sincronização de Conta", `Conta Google '${email}' foi conectada e integrada com sucesso.`, "success");
+    return res.json({ success: true, email });
+  } else {
+    return res.status(400).json({ error: "Token inválido ou expirado." });
+  }
+});
+
+// Check Connection Status
+app.get("/api/google/status", async (req, res) => {
+  if (googleAccessToken) {
+    const email = await verifyGoogleToken(googleAccessToken);
+    if (email) {
+      googleConnectedUserEmail = email;
+      return res.json({ connected: true, email });
+    } else {
+      googleAccessToken = null;
+      googleConnectedUserEmail = null;
+    }
+  }
+  res.json({ connected: false });
+});
+
 // Google Sheets Sync Route
-app.post("/api/sheets/sync", (req, res) => {
+app.post("/api/sheets/sync", async (req, res) => {
   const db = readDB();
   
   if (!db.config.sheetsEnabled || !db.config.sheetsId) {
@@ -1010,18 +1191,151 @@ app.post("/api/sheets/sync", (req, res) => {
     });
   }
 
-  // Generate logs feed details
-  const timeStr = new Date().toLocaleTimeString();
-  const summary = `Sincronização executada às ${timeStr}. Planilhas sincronizadas: 'Funcionários' (${db.employees.length} regs), 'Registros' (${db.logs.length} regs), 'Configurações' (1 reg). GSpread API status: OK.`;
-  
-  addSystemLog("Google Sheets Agent", "Sincronização de Dados", summary, "success");
+  const token = req.headers["x-google-token"] || googleAccessToken;
+  if (!token) {
+    return res.json({
+      success: false,
+      message: "Conexão com Google pendente. Por favor, conecte sua conta do Google no Painel Administrativo primeiro."
+    });
+  }
 
-  res.json({
-    success: true,
-    message: "Planilha do Google Sheets sincronizada com êxito!",
-    syncedRows: db.employees.length + db.logs.length,
-    timestamp: new Date().toISOString()
-  });
+  // Extract Sheet ID from URL or code
+  let sheetsId = db.config.sheetsId;
+  if (sheetsId.startsWith("http")) {
+    const match = sheetsId.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (match) sheetsId = match[1];
+  }
+
+  try {
+    // 1. Get current spreadsheet tabs to see if any are missing
+    const sheetsRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetsId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (!sheetsRes.ok) {
+      const errText = await sheetsRes.text();
+      return res.json({
+        success: false,
+        message: `Planilha do Google Sheets não pôde ser lida. Verifique o ID configurado ou reconecte seu Google. Detalhes: ${errText}`
+      });
+    }
+
+    const spreadsheetData: any = await sheetsRes.json();
+    const existingTitles = (spreadsheetData.sheets || []).map((s: any) => s.properties.title);
+
+    const neededSheets = ["Funcionarios", "Registros", "Empresas", "Escalas", "Ajustes"];
+    const sheetsToAdd = neededSheets.filter(title => !existingTitles.includes(title));
+
+    // Create missing sheets if any
+    if (sheetsToAdd.length > 0) {
+      const addRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetsId}:batchUpdate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          requests: sheetsToAdd.map(title => ({
+            addSheet: {
+              properties: { title }
+            }
+          }))
+        })
+      });
+      if (!addRes.ok) {
+        console.error("Erro ao criar as abas necessárias:", await addRes.text());
+      }
+    }
+
+    // 2. Prepare datasets
+    const employeesRows = [
+      ["ID", "Nome", "CPF", "Cargo", "Setor", "Entrada", "Saída Almoço", "Retorno Almoço", "Saída", "Foto de Perfil", "Status", "Criado Em"],
+      ...db.employees.map((e: any) => [
+        e.id || "", e.nome || "", e.cpf || "", e.cargo || "", e.setor || "", e.entrada || "", e.almocoSaida || "", e.almocoRetorno || "", e.saida || "", e.fotoUrl || "", e.status || "", e.createdAt || ""
+      ])
+    ];
+
+    const logsRows = [
+      ["ID do Registro", "CPF", "Nome do Funcionário", "Data", "Hora", "Tipo de Ponto", "Status", "Foto Capturada", "Confiança Biometria", "Semelhança Confirmada", "ID Empresa", "IP de Origem", "GPS / Localização", "Assinatura Digital REP-P"],
+      ...db.logs.map((l: any) => [
+        l.id || "", l.cpf || "", l.nome || "", l.data || "", l.hora || "", l.tipo || "", l.status || "", l.fotoUrl || "", l.confidence || "", l.matched || "", l.empresaId || "", l.ip || "", l.gps || "", l.hash || ""
+      ])
+    ];
+
+    const companiesRows = [
+      ["ID da Empresa", "Nome / Razão Social", "CNPJ", "Endereço", "Status"],
+      ...(db.companies || []).map((c: any) => [
+        c.id || "", c.nome || "", c.cnpj || "", c.endereco || "", c.status || ""
+      ])
+    ];
+
+    const escalasRows = [
+      ["ID da Escala", "Nome / Identificador", "Carga Horária (Semanas)", "Horário Entrada", "Descanso Almoço Saída", "Retorno Descanso Almoço", "Horário Saída", "Tolerância Atraso (minutos)"],
+      ...(db.escalas || []).map((s: any) => [
+        s.id || "", s.nome || "", s.cargaHoraria || "", s.entrada || "", s.almocoSaida || "", s.almocoRetorno || "", s.saida || "", s.tolerancia || 0
+      ])
+    ];
+
+    const ajustesRows = [
+      ["ID Solicitação", "ID Registro Vinculado", "CPF", "Nome Colaborador", "Data Ocorrência", "Novo Horário", "Tipo Ponto", "Justificativa Legal", "Status Homologação", "Data da Solicitação"],
+      ...(db.ajustes || []).map((a: any) => [
+        a.id || "", a.pontoId || "", a.cpf || "", a.nome || "", a.data || "", a.horaNova || "", a.tipo || "", a.justificativa || "", a.status || "", a.dataSolicitacao || ""
+      ])
+    ];
+
+    const datasets = [
+      { name: "Funcionarios", values: employeesRows },
+      { name: "Registros", values: logsRows },
+      { name: "Empresas", values: companiesRows },
+      { name: "Escalas", values: escalasRows },
+      { name: "Ajustes", values: ajustesRows }
+    ];
+
+    // 3. Clear and write each spreadsheet tab
+    for (const dataset of datasets) {
+      // Clear cells first
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetsId}/values/${dataset.name}!A1:Z5000:clear`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      // Write values
+      const putRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetsId}/values/${dataset.name}!A1?valueInputOption=USER_ENTERED`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          values: dataset.values
+        })
+      });
+
+      if (!putRes.ok) {
+        throw new Error(`Erro ao preencher aba '${dataset.name}': ${await putRes.text()}`);
+      }
+    }
+
+    const timeStr = new Date().toLocaleTimeString();
+    const summary = `Sincronização executada com sucesso às ${timeStr} na Conta Google (${googleConnectedUserEmail || "Autorizada"}). Sincronizados: Funcionários (${db.employees.length} regs), Registros (${db.logs.length} regs), Empresas (${(db.companies || []).length} regs), Escalas (${(db.escalas || []).length} regs), Ajustes (${(db.ajustes || []).length} regs).`;
+    
+    addSystemLog("Google Sheets Agent", "Sincronização de Dados", summary, "success");
+
+    res.json({
+      success: true,
+      message: "Planilha do Google Sheets sincronizada com êxito! Todas as abas foram atualizadas com colunas formatadas.",
+      syncedRows: db.employees.length + db.logs.length,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    console.error("Erro na sincronização Google Sheets:", error);
+    addSystemLog("Google Sheets Agent", "Sincronização de Dados", `Falha na sincronização: ${error.message || error}`, "error");
+    res.json({
+      success: false,
+      message: `Erro ao sincronizar com Google Sheets: ${error.toString()}`
+    });
+  }
 });
 
 // Serving logic for front-end & Vite
