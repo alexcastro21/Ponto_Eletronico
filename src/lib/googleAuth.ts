@@ -1,6 +1,17 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, type User } from "firebase/auth";
-import firebaseConfig from "../../firebase-applet-config.json";
+import firebaseConfigDefault from "../../firebase-applet-config.json";
+
+// Read environment variables if available (allowing user to override credentials for production hosting platforms like Render)
+const metaEnv = (import.meta as any).env || {};
+const firebaseConfig = {
+  apiKey: metaEnv.VITE_FIREBASE_API_KEY || firebaseConfigDefault.apiKey,
+  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigDefault.authDomain,
+  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || firebaseConfigDefault.projectId,
+  appId: metaEnv.VITE_FIREBASE_APP_ID || firebaseConfigDefault.appId,
+  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigDefault.storageBucket,
+  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigDefault.messagingSenderId,
+};
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
