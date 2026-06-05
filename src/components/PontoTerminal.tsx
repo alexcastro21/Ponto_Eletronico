@@ -158,6 +158,13 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
     }
   };
 
+  // Re-bind stream when videoRef is mounted or step changes
+  useEffect(() => {
+    if (cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [cameraStream, step]);
+
   // Generate a downsampled greyscale visual signature to match faces locally
   const getVisualFingerprint = (dataUrl: string): Promise<number[]> => {
     return new Promise((resolve) => {
@@ -362,20 +369,21 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
 
     // Capture base64 from video stream if active and producing frames
     let capturedFromCam = false;
-    if (hasCamera && videoRef.current && canvasRef.current) {
+    if (hasCamera && videoRef.current) {
       const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (video.videoWidth > 0 && video.videoHeight > 0) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.scale(-1, 1); // mirror reflection
-          ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
-          photoDataUri = canvas.toDataURL("image/jpeg", 0.85);
-          if (photoDataUri && photoDataUri.length > 500) {
-            capturedFromCam = true;
-          }
+      const canvas = document.createElement("canvas");
+      const width = video.videoWidth || 640;
+      const height = video.videoHeight || 480;
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1); // mirror reflection
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        photoDataUri = canvas.toDataURL("image/jpeg", 0.85);
+        if (photoDataUri && photoDataUri.length > 500) {
+          capturedFromCam = true;
         }
       }
     }
@@ -742,11 +750,20 @@ export default function PontoTerminal({ onAdminAccess }: PontoTerminalProps) {
                       </div>
                       <div className="px-2 w-full">
                         <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Webcam Bloqueada / Indisponível</h4>
-                        <p className="text-[10px] text-gray-400 leading-relaxed max-w-[240px] mt-1 mx-auto">
+                        <p className="text-[10px] text-gray-400 leading-relaxed max-w-[240px] mt-1 mx-auto pb-1">
                           Devido às restrições de permissão do navegador, a câmera física não pôde ser ativada. Use o simulador oficial abaixo para testar a biometria:
                         </p>
 
-                        <div className="mt-4 w-full">
+                        <button
+                          type="button"
+                          onClick={() => startWebcam()}
+                          className="mb-2 text-[10px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 font-bold py-1 px-2.5 rounded-lg cursor-pointer transition-all uppercase tracking-wide inline-flex items-center gap-1.5"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Reativar Minha Câmera
+                        </button>
+
+                        <div className="mt-3 w-full">
                           <label className="block text-[9px] font-mono font-bold text-gray-400 text-left uppercase tracking-wider mb-1.5">
                             Selecione o Rosto para Apresentar:
                           </label>
